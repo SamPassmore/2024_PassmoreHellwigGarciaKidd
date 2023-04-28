@@ -22,12 +22,12 @@ glottolog = read.csv("https://raw.githubusercontent.com/glottolog/glottolog-cldf
 grambank_wide = left_join(grambank_wide, glottolog, by = c("Language_ID" = "ID"))
 
 # how many languages have ISO codes
-sum(!grambank_wide$ISO639P3code == "") / nrow(grambank_wide)
+cat("We can match", round(sum(!grambank_wide$ISO639P3code == "") / nrow(grambank_wide), 2) * 100, "% languages on exact ISO codes\n")
 # What if we use the 'closest match' variable
-sum(!grambank_wide$Closest_ISO369P3code == "") / nrow(grambank_wide)
+cat("We can match", round(sum(!grambank_wide$Closest_ISO369P3code == "") / nrow(grambank_wide), 2) * 100, "% languages on closest ISO codes\n")
 
 ## Read in EGIDS data
-egids = read.csv('data/language_endangerment.csv')
+egids = read.csv('processed_data/language_endangerment.csv')
 
 # How many languages are not being taught to children
 # See table of level descriptions here: https://en.wikipedia.org/wiki/Expanded_Graded_Intergenerational_Disruption_Scale
