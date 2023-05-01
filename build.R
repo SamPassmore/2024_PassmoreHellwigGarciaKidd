@@ -7,4 +7,5 @@ system("RScript ./get_endangerment.R")
 system("RScript ./cross_datasets.R")
 
 # 3. Make figures
+dir.create("figures/", recursive = TRUE)
 system("RScript ./plot_grambankegids.R")

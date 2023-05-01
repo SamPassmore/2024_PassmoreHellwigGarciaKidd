@@ -12,6 +12,7 @@ df = df[,keep_vars]
 # make the EGIDS scale a factor
 df$EGIDS = factor(df$EGIDS, levels = c("1", "2", "3", "4", "5", "6a", "6b", "7", "8a", "8b", "9"))
 
+# https://en.wikipedia.org/wiki/Expanded_Graded_Intergenerational_Disruption_Scale
 # The EGDIS factor has the following relationship to numbers:
 # 1   1   National
 # 2   2   Regional
@@ -28,6 +29,8 @@ df$EGIDS = factor(df$EGIDS, levels = c("1", "2", "3", "4", "5", "6a", "6b", "7",
 
 # make EGIDS a integer
 df$EGIDS.int = as.numeric(df$EGIDS)
+
+cat("There are", nrow(df), "languages in our dataset \n")
 
 cat("There are", sum(df$EGIDS.int >= 8, na.rm = TRUE), "languages that have no child speakers (including extinct and symbolically practiced languages) \n")
 cat("There are", sum(df$EGIDS.int >= 8 & df$EGIDS.int <= 11, na.rm = TRUE), "languages that have no child speakers (excluding extinct languages but including symbolically practiced languages)\n")

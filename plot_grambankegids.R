@@ -41,6 +41,14 @@ hist(colSums(gb_egids_counts[,-1]))
 # Count of languages by feature
 hist(colSums(gb_egids_counts[,-1]), breaks = 50)
 
+# Keep feature where there is more than 100 languages
+col_idx = colSums(gb_egids_counts[1:3,2:ncol(gb_egids_counts)]) > 250
+gb_egids_counts = gb_egids_counts[,c(TRUE, col_idx)]
+
+# Check that worked
+x = assertthat::are_equal(names(col_idx)[col_idx], colnames(gb_egids_counts)[-1])
+cat("We only analyse the", sum(col_idx), "features that have more than 250 languages coded")
+
 # proportion of features by language endangerment
 gb_egids_proportions = sapply(gb_egids_counts[,-1], function(x) x / sum(x))
 gb_egids_proportions = data.frame(gb_egids_counts[,1], gb_egids_proportions)
@@ -57,16 +65,29 @@ proportion_long$name = factor(proportion_long$name,
 
 
 #### Plot the counts and proportions ####
-ggplot(counts_long, aes(x = value, y = name, fill = EGIDS.child)) + 
-  geom_bar(stat="identity") + 
+p_count = ggplot(counts_long, aes(x = value, y = name, fill = EGIDS.child)) + 
+  geom_col(position = "stack", width = 1) + 
   theme_classic() + 
   ggtitle("Counts of Endangered languages by Grambank feature") + 
-  theme(legend.position = "bottom") 
+  scale_fill_manual(values = c("#00b38a", "#f2ac42", "#ea324c"), na.value = alpha("#ea324c", alpha = 0.70)) + 
+  xlab("Proportion") + 
+  ylab("Grambank Feature") + 
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        axis.text.y = element_text(size = 5)) 
   
-ggplot(proportion_long, aes(x = value, y = name, fill = EGIDS.child)) + 
-  geom_bar(stat="identity") + 
+p_proportions = ggplot(proportion_long, aes(x = value, y = name, fill = EGIDS.child)) + 
+  # geom_bar(stat="identity") + 
+  geom_col(position = "stack", width = 1) + 
   theme_classic() + 
   ggtitle("Proportions of Endangered languages by Grambank feature") + 
-  theme(legend.position = "bottom") 
+  scale_fill_manual(values = c("#00b38a", "#f2ac42", "#ea324c"),  na.value = alpha("#ea324c", alpha = 0.70)) + 
+  xlab("Proportion") + 
+  ylab("Grambank Feature") + 
+   theme(legend.position = "bottom",
+         legend.title = element_blank(),
+         axis.text.y = element_text(size = 5)) 
 
+ggsave(plot = p_count, filename = "figures/count_plot.png", width = 210, height = 148.5, units = "mm")
+ggsave(plot = p_proportions, filename = "figures/proportions_plot.png", width = 210, height = 148.5, units = "mm")
 
