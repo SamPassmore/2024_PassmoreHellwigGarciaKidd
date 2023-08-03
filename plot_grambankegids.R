@@ -3,6 +3,7 @@
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(stringr)
 
 
 gb_egids = read.csv("processed_data/merged_dataset.csv")
@@ -41,13 +42,14 @@ hist(colSums(gb_egids_counts[,-1]))
 # Count of languages by feature
 hist(colSums(gb_egids_counts[,-1]), breaks = 50)
 
-# Keep feature where there is more than 100 languages
-col_idx = colSums(gb_egids_counts[1:3,2:ncol(gb_egids_counts)]) > 250
+# Keep feature where there is more than N languages
+n_languages = 250
+col_idx = colSums(gb_egids_counts[1:3,2:ncol(gb_egids_counts)]) > n_languages
 gb_egids_counts = gb_egids_counts[,c(TRUE, col_idx)]
 
 # Check that worked
 x = assertthat::are_equal(names(col_idx)[col_idx], colnames(gb_egids_counts)[-1])
-cat("We only analyse the", sum(col_idx), "features that have more than 250 languages coded")
+cat("We only analyse the", sum(col_idx), "features that have more than", n_languages, "languages coded")
 
 # proportion of features by language endangerment
 gb_egids_proportions = sapply(gb_egids_counts[,-1], function(x) x / sum(x))
@@ -88,6 +90,50 @@ p_proportions = ggplot(proportion_long, aes(x = value, y = name, fill = EGIDS.ch
          legend.title = element_blank(),
          axis.text.y = element_text(size = 5)) 
 
-ggsave(plot = p_count, filename = "figures/count_plot.png", width = 210, height = 148.5, units = "mm")
-ggsave(plot = p_proportions, filename = "figures/proportions_plot.png", width = 210, height = 148.5, units = "mm")
+ggsave(plot = p_count, filename = "figures/count_plot.png", width = 210, height = 290, units = "mm")
+ggsave(plot = p_proportions, filename = "figures/proportions_plot.png", width = 210, height = 290, units = "mm")
 
+
+#### Grambank, EGIDS, and K&G
+kg = read.csv('data/journal_archive_data_2021.csv', sep = ";")
+gb_egids$studied = ifelse(gb_egids$Name %in% kg$language, "Studied", "Not Studied")
+
+grambank_titles = read.csv("https://raw.githubusercontent.com/glottobank/grambank-cldf/master/cldf/parameters.csv?token=GHSAT0AAAAAACD2VIPHYZ3OXEINBFPQUDKIZEP7TMQ")
+
+grambankfeatures_idx = colnames(gb_egids)[str_detect(colnames(gb_egids), pattern = "GB[0-9]+")]
+
+## Which features have no languages studied?
+cat("The following features do not occur in any langauges studied by CAR:\n")
+features_zero = names(which(colSums(gb_egids[gb_egids$studied == "Studied",grambankfeatures_idx], na.rm = TRUE) == 0))
+cat(features_zero)
+cat("These features occur in the following number of languages in Grambank:")
+colSums(gb_egids[,features_zero], na.rm = TRUE)
+
+pdf("figures/GB_plots.pdf")
+for(i in grambankfeatures_idx){
+  
+  df = gb_egids[,c(i, "studied")]
+  
+  groupers = c("studied", i)
+  
+  plot_df = df %>% 
+    group_by_at(groupers) %>% 
+    summarise(n = n()) %>%
+    mutate(freq = n / sum(n)) 
+  
+  colnames(plot_df) = c("studied", "variable", "n", "freq")
+
+    
+  title = grambank_titles$Name[which(i == grambank_titles$ID)]    
+  title = paste0(i, ": ", title)
+  
+  p = ggplot(plot_df, aes(fill = factor(variable), y = freq, x = factor(studied))) + 
+    geom_histogram(stat = "identity", position = "fill") +
+    geom_text(aes(label = n), colour = "white", position = position_stack(vjust = 0.5)) + 
+    theme_classic(base_size = 20) +
+    ylim(c(0, 1)) + 
+    ggtitle(title)
+  
+  print(p)
+}
+dev.off()

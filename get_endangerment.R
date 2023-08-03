@@ -1,6 +1,8 @@
 ## make endangerment csv
 
 library(sf)
+library(dplyr)
+library(scales)
 
 language_ranges = readRDS("data/lang_polys_merged_cea.rds")
 
@@ -30,6 +32,27 @@ df$EGIDS = factor(df$EGIDS, levels = c("1", "2", "3", "4", "5", "6a", "6b", "7",
 # make EGIDS a integer
 df$EGIDS.int = as.numeric(df$EGIDS)
 
+# How many languages are not being taught to children
+# See table of level descriptions here: https://en.wikipedia.org/wiki/Expanded_Graded_Intergenerational_Disruption_Scale
+nochildren_levels = c("6b", "7", "8a", "8b", "9")
+nochildren_levels2 = c("7", "8a", "8b", "9")
+
+## No children learners or not
+df$nochildren = ifelse(df$EGIDS %in% nochildren_levels, 1, 0)
+df$nochildren_strict = ifelse(df$EGIDS %in% nochildren_levels2, 1, 0)
+# df$children_speakers = ifelse(df$EGIDS %in% nochildren_levels, 0, 1)
+
+# Match to Glottolog
+## Read in Glottolog data
+glottolog = read.csv("https://raw.githubusercontent.com/glottolog/glottolog-cldf/master/cldf/languages.csv")
+df = left_join(df, glottolog, by = c("LANG_ISO" = "ISO639P3code"))
+
+# How many matches between grambank and glottolog
+cat("We can match", round(sum(df$LANG_ISO %in% glottolog$ISO639P3code) / nrow(df), 3) * 100, "% languages between EGIDS and Glottolog")
+
+# which languages don't match
+egids_notmatched = df$LANG_ISO[!df$LANG_ISO %in% glottolog$ISO639P3code]
+
 cat("There are", nrow(df), "languages in our dataset \n")
 
 cat("There are", sum(df$EGIDS.int >= 8, na.rm = TRUE), "languages that have no child speakers (including extinct and symbolically practiced languages) \n")
@@ -37,7 +60,9 @@ cat("There are", sum(df$EGIDS.int >= 8 & df$EGIDS.int <= 11, na.rm = TRUE), "lan
 cat("There are", sum(df$EGIDS.int >= 8 & df$EGIDS.int <= 10, na.rm = TRUE), "languages that have no child speakers (excluding extinct languages and symbolically practiced languages)\n")
 
 cat("There are", sum(df$EGIDS.int == 7, na.rm = TRUE), "languages that are vulnerable and have limited chlidren speakers")
-
 cat("There are", sum(df$EGIDS.int < 7, na.rm = TRUE), "languages that are stable and available to study in children")
+
+cat("There are", label_comma(accuracy = NULL)(sum(df$nochildren)), "languages that are not being taught to all children of a language.\n")
+cat("That is", percent(sum(df$nochildren) / nrow(df)), "of contemporary langauges diversity.\n")
 
 write.csv(df, "processed_data/language_endangerment.csv", row.names = FALSE)
