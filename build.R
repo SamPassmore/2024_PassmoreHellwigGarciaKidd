@@ -8,7 +8,6 @@ system("RScript ./cross_datasets.R")
 
 # 3. Cross reference Endangerment, Grambank, and Kidd & Garcia 2022
 
-
 # 4. Make figures
 dir.create("figures/", recursive = TRUE)
 system("RScript ./kiddgarcia_egids.R") # Figure 1 & Figure 3
