@@ -1,0 +1,6 @@
+[submodule "submodule/grambank-analysed"]
+	path = submodule/grambank-analysed
+	url = https://github.com/grambank/grambank-analysed.git
+[submodule "submodule/phoible"]
+	path = submodule/phoible
+	url = https://github.com/phoible/dev.git

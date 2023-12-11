@@ -1,0 +1,165 @@
+---
+title: "Child Language Acquisition & Endangerment"
+author: "Sam Passmore & Evan Kidd"
+format: pdf
+editor: visual
+---
+
+This document details the data, code, figures, and decisions used in Passmore & Kidd (2024).
+
+Packages necessary for this report:
+
+```{r, message=FALSE}
+library(dplyr)
+library(tidyr)
+
+# devtools::install_github("SimonGreenhill/rcldf", dependencies = TRUE)
+library(rcldf)
+```
+
+## Data Sources
+
+There are four key sources of data used in this project:
+
+-   Grambank (Skirgärd, et al. 2023)
+
+-   Phoible (Moran & McCloy, 2019)
+
+-   The languages and number of papers from the top four Child Language Acquisition Journals (Evan & Garcia, 2022)
+
+-   Agglomerated Endangerment Scale (AES) (Hammarström et al., 2018)
+
+Grambank, Phoible, and Glottolog are included as submodules as part of the repository, linking directly to their GitHub repositories. We include the data from Evan & Garcia (2022) as a csv file, which is included in this repository, but also available at this repository: <https://osf.io/jmxnw>
+
+### Grambank
+
+Here we used the GitHub repository created for the Grambank release paper (i.e. grambank-analysed and not grambank). This is because there are some convenience scripts that we can use in the repository to make our analyses easier. In the Grambank release paper (Skirgard et al. 2023), there is a series of data curation steps that are used to create a dataset ready for analysis. The key steps are:
+
+1\) Limiting data to one dialect per language, leaving 2,430 languages (keeping the dialect with the most complete data),
+
+2\) Making dummy variables from the six non-binary variables, bringing the total to 201 features.
+
+3\) Using random forests to impute the missing data, which totals around 24% of the dataset.
+
+4\) Reducing the dataset to its most complete state (1,509 languages, and 114 features).
+
+These steps are performed within the system command in the text below. More details can be found in the \[Grambank release paper\](<https://www.science.org/doi/10.1126/sciadv.adg6175>), or within the \[Github repository\](<https://github.com/grambank/grambank-analysed>).
+
+The result of these commands is a datafile where the rows are languages and the columns are Grambank features, which we will use for the multi-dimensional scaling analysis later.
+
+```{r}
+system(
+  "cd ./submodule/grambank-analysed/R_grambank/;
+  git submodule update --init
+  mkdir -p output/non_GB_datasets
+	mkdir -p output/coverage_plots
+	mkdir -p output/GB_wide
+	Rscript make_glottolog-cldf_table.R
+	Rscript unusualness/processing/assigning_AUTOTYP_areas.R
+	Rscript make_wide.R
+	Rscript make_wide_binarized.R
+  Rscript impute_missing_values.R | tee impute_missing_values.log")
+
+grambank = read.table(
+  "submodule/grambank-analysed/R_grambank/output/GB_wide/GB_wide_imputed_binarized.tsv",
+  sep = "\t",
+  header = 1
+)
+
+
+
+```
+
+### Phoible
+
+The code below shows the wrangling to Phoible data into the appropriate format for the multidimensional scaling analysis. Here are decisions to note:
+
+-   Some languages have multiple entries, with varying phonological inventories. We reduce the data to one inventory per language, choosing inventories at random.
+
+```{r}
+# phoible data
+p_df = read.csv("submodules/phoible/cldf/values.csv")
+
+# Some languages have been coded multiple times (doculets)
+# We want to select one inventory per language, but we make no judgement on which inventory is better. Choice of doculet is random. 
+p_ss =  p_df %>% 
+  dplyr::group_by(Language_ID) %>% 
+  dplyr::filter(Inventory_ID == sample(unique(Inventory_ID), 1)) 
+
+# The number of language ids matches the number of Inventory IDs 
+# (i.e. there is one language code per inventory code)
+all(n_distinct(p_ss$Language_ID) == n_distinct(p_ss$Inventory_ID))
+
+# Make the dataset wide, this will build a dataset where columns are 
+# phonemes and rows are languages.
+phoible_wide = pivot_wider(p_ss,
+                      id_cols = Language_ID,
+                      values_from = Value,
+                      names_from = Value)
+
+# This changes the data to a 0 (phoneme is not used) 1 (phoneme is used)
+phoible_df = apply(phoible_wide[, 2:ncol(phoible_wide)], 2, function(x)
+  ifelse(is.na(x), 0, 1))
+phoible = data.frame(Language_ID = phoible_wide$Language_ID, phoible_df)
+
+
+```
+
+### Glottolog & the **Agglomerated Endangerment Scale (AES)**
+
+The AES scale is part of the Glottolog datatset. Here, we download that dataset, extract the AES value, and attach it to the language metadata file from Glottolog.
+
+```{r message=FALSE}
+glottolog = cldf("https://github.com/glottolog/glottolog-cldf/archive/refs/tags/v4.8.zip")
+
+languages = glottolog$tables$LanguageTable
+values = glottolog$tables$ValueTable
+aes = values %>% filter(Parameter_ID == "aes")
+
+languages = inner_join(aes, languages, by = c("Language_ID" = "ID")) %>% 
+  select(ID, Language_ID, Name, Value, Code_ID, Comment, Source, Glottocode)
+
+# Check all languages only have one code
+n_distinct(languages$Language_ID) == nrow(languages)
+```
+
+### Adding Kidd & Garcia (2022)
+
+The supplementary material of Kidd & Garcia have a list of all papers published in the top four child language acquisition journals - including metadata for the language spoken. I have extracted a list of unique languages studied, and the number of papers written about that language into a csv file below. The names used to describe languages have been manually curated to match with the Glottolog dataset. An example of a curated match is ensure languages like *Tongan* in Kidd & Garcia, matches with *Tongan (Tonga Island)* in Glottolog. Computerized matching requires exact matches.
+
+Some matches could not be made, which are listed in the table below. These are two signed languages that could not be linked to a specific Glottocode.
+
+```{r}
+kiddgarcia = read.csv("data/name_matching.csv")
+
+languages = left_join(languages, kiddgarcia, by = c("Name" = "name_matching"))
+
+sum(!is.na(languages$count)) == nrow(kiddgarcia)
+
+# find un-matched languages
+nm = !kiddgarcia$name_matching %in% languages$Name
+kiddgarcia[nm,]
+
+```
+
+# Analysis & Figures 
+
+## Histograms
+
+## Hexbin graphs
+
+To build the Hexbin projections of linguistic diversity, there are three key steps:
+
+1\) Build a distance matrix between all languages
+
+2\) Run the multidimensional scaling algorithm
+
+3\) Plot and bin the results.
+
+We do this for the Grambank and Phoible dataset.
+
+```{r}
+
+```
+
+## ARIMA models 
