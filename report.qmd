@@ -326,33 +326,6 @@ p1_grambank = ggplot(plot_grambank,
 
 ```
 
-Phoible has two outlier languages. They are Dan (Family: Mande; Country: Côte d'Ivoire, Guinea, Liberia) and Khams Tibetan (Family: Sino-Tibetan; Countries: China \[Tibet\], India, Myanmar). The below plots remove these points to make the view of phonological diversity more clear. However, the distance of these languages from the majority of phonological diversity is worth investigating further.
-
-```{r}
-plot_phoible = plot_phoible %>% 
-  dplyr::filter(!Name %in% c("Dan", "Khams Tibetan"))
-
-p1.1_phoible = ggplot(plot_phoible, 
-                      aes(MDS.X, MDS.Y, col = factor(children))) + 
-  geom_point(aes(shape = factor(studied)), alpha = 0.5) +
-  coord_equal() + 
-  theme_classic(base_size = font_size) + 
-  theme(aspect.ratio = 1, legend.position = "right") + 
-  scale_linewidth(range = c(0, 3)) + 
-  scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
-                    labels = c("No", "Yes")) + 
-  guides(col=guide_legend(title="Children Speakers"),
-         shape=guide_legend(title="Studied")) + 
-  ggtitle("Phoible") + 
-  xlab("") + ylab("")
-
-(p1.1_phoible | p1_grambank) + 
-  plot_layout(guides = 'collect') & 
-  theme(legend.position = 'bottom')
-
-```
-
 ### Hexbin Plots
 
 ```{r}
@@ -688,7 +661,7 @@ The ARIMA model shows that there is no significant relationship between the incr
 
 ### Plot ARIMA
 
-```{r}
+```{r warning=FALSE}
 future_forcasts =
   forecast(ARIMAfit,
            newdata = data.frame(
@@ -810,7 +783,7 @@ pp
 
 ### Plot ARIMA & N Papers published
 
-```{r}
+```{r warnings=FALSE}
 plot_arima$cumsum_papers = cumsum(plot_arima$newpapers_year)
 
 pp = 
@@ -821,7 +794,7 @@ pp =
   geom_col(aes(x = year, y = newpapers_year), alpha = 0.4) +
   theme_classic(base_size = font_size) + 
   xlab("Years") +
-  ylab("N languages studied") + 
+  ylab("N of new languages studied / \n N of Papers published per year") + 
   ggtitle("New Languages per year vs Number of Papers") 
 
 
