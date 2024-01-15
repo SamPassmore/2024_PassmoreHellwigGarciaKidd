@@ -116,7 +116,42 @@ phoible_wide = pivot_wider(p_ss,
 phoible_df = apply(phoible_wide[, 2:ncol(phoible_wide)], 2, function(x)
   ifelse(is.na(x), 0, 1))
 phoible = data.frame(Language_ID = phoible_wide$Language_ID, phoible_df)
+```
 
+### The Expanded Graded Intergenerational Disruption Scale (EGIDS)
+
+EGIDS is a 13-point scale of endangerment for 7,206 languages, ranging from 1 (Internationally used languages) to 10 (Langauge is no longer used, and no one holds a symbolic sense of identity with the language). There are seven categories of 'safe' languages, a vulnerable category, three increasing levels of endangerment, and two categories of languages that are no longer used. Our data collapses the two sleeping categories.
+
+We draw the EGIDS scale from the supplementary data of Bromham et al (2022).
+
+All levels are detailed in the table below:
+
+|           |                |                                                                                                                              |                       |
+|-----------|----------------|------------------------------------------------------------------------------------------------------------------------------|-----------------------|
+| **LEVEL** | **LABEL**      | **DESCRIPTION**                                                                                                              | UNESCO                |
+| 0         | International  | "The language is used internationally for a broad range of functions."                                                       |                       
+                                                                                                                                                             Safe                   |
+| 1         | National       | "The language is used in education, work, mass media, government at the nationwide level."                                   | Safe                  |
+| 2         | Regional       | "The language is used for local and regional mass media and governmental services."                                          | Safe                  |
+| 3         | Trade          | "The language is used for local and regional work by both insiders and outsiders."                                           | Safe                  |
+| 4         | Educational    | "Literacy in the language is being transmitted through a system of public education."                                        | Safe                  |
+| 5         | Written        | "The language is used orally by all generations and is effectively used in written form in parts of the community."          | Safe                  |
+| 6a        | Vigorous       | "The language is used orally by all generations and is being learned by children as their first language."                   | Safe                  |
+| 6b        | Threatened     | "The language is used orally by all generations but only some of the                                                         
+                              child-bearing generation are transmitting it to their children."                                                              | Vulnerable            |
+| 7         | Shifting       | "The child-bearing generation knows the language well enough to use                                                          
+                              it among themselves but none are transmitting it to their children."                                                          | Definitely Endangered |
+| 8a        | Moribund       | "The only remaining active speakers of the language are members of the grandparent generation."                              | Severely Endangered   |
+| 8b        | Nearly Extinct | "The only remaining speakers of the language are members of the                                                              
+                              grandparent generation or older who have little opportunity to use the                                                        
+                              language."                                                                                                                    | Critically Endangered |
+| 9         | Dormant        | "The language serves as a reminder of heritage identity for an ethnic community. No one has more than symbolic proficiency." | Extinct               |
+| 10        | Extinct        | "No one retains a sense of ethnic identity associated with the language, even for symbolic purposes. "                       | Extinct               |
+
+: Table of the Expanded Graded Intergenerational Disruption Scale, reproduced from Lewis and Simons (2010).
+
+```{r warning=FALSE}
+languages = read.csv("processed_data/language_endangerment.csv")
 
 ```
 
@@ -171,43 +206,27 @@ The levels of endangerment in the AES scale are described in the table below:
 We create an additional variable determining whether a language is expected to have children speakers based on their endangerment level. With respect to the AES descriptions, we describe this as 'shifting' or greater. In all scales, 'shifting' is the level where the description requires that no children are learning the language and therefore, are languages inaccessible to child language acquisition.
 
 ```{r message=FALSE}
-glottolog = 
+glottolog =
   cldf("https://github.com/glottolog/glottolog-cldf/archive/refs/tags/v4.8.zip")
 
-languages = glottolog$tables$LanguageTable
-values = glottolog$tables$ValueTable
-aes = values %>% filter(Parameter_ID == "aes")
-
-languages = inner_join(aes, languages, by = c("Language_ID" = "ID")) %>%
-  select(ID,
-         Language_ID,
-         Name,
-         Value,
-         Code_ID,
-         Comment,
-         Source,
-         Glottocode) %>%
-  mutate(Value = as.numeric(Value),
-         nochildren_strict = ifelse(Value >= 3, 1, 0))
-
-# Check all languages only have one code
-n_distinct(languages$Language_ID) == nrow(languages)
+glottolog_languages = glottolog$tables$LanguageTable
 ```
 
 ### Kidd & Garcia (2022)
 
 The supplementary material of Kidd & Garcia have a list of all papers published in the top four child language acquisition journals - including metadata for the language spoken - available here <https://osf.io/jmxnw>. We have extracted a list of unique languages studied, and the number of papers written about that language into a csv file below. The names used to describe languages have been manually curated to match with the Glottolog dataset. An example of a curated match is ensure languages like *Tongan* in Kidd & Garcia, matches with *Tongan (Tonga Island)* in Glottolog. We require exact matches.
 
-Some matches could not be made, which are listed in the table below. These are two signed languages that could not be linked to a specific Glottocode, and Greenlandic and Light Warlpiri, which do not have AES endangerment codes so could not be matched.
+Some languages listed in Kidd & Garcia were not listed in the EGIDS dataset. These languages are listed below.
 
-```{r}
+```{r warning=FALSE}
 # Raw data from Kidd & Garcia 2022
 kiddgarcia = read.csv('data/journal_archive_data_2021.csv', sep = ";") 
 # Matched data 
-kiddgarcia_matching = read.csv("data/name_matching.csv")
+kiddgarcia_matching = read.csv("processed_data/name_matching.csv")
+kiddgarcia = left_join(kiddgarcia, kiddgarcia_matching, by = "language")
 
-languages = left_join(languages, kiddgarcia_matching, 
-                      by = c("Name" = "name_matching"))
+languages = left_join(languages, kiddgarcia, 
+                      by = c("Name" = "egids_matching"))
 
 # Languages that have been studied have a paper count
 languages$studied = ifelse(is.na(languages$count), 0, 1)
@@ -225,16 +244,20 @@ kiddgarcia_topics = kiddgarcia %>%
   left_join(kiddgarcia_matching, by = "language")
 
 languages = left_join(languages, kiddgarcia_topics, 
-                      by = c("Name" = "name_matching", 
+                      by = c("Name" = "egids_matching", 
                              "count" = "count",
                              "language" = "language"))
+
+## Add glottocodes to the languages data
+# languages = left_join(languages, glottolog_languages[,c("ISO639P3code", "Glottocode")],
+#                       by = c("LANG_ISO" = "ISO639P3code"))
 
 # Are all languages matched? 
 sum(!is.na(languages$count)) == nrow(kiddgarcia_matching)
   
 # find un-matched languages
-nm = !kiddgarcia_matching$name_matching %in% languages$Name
-kiddgarcia_matching[nm,]
+nm = unique(kiddgarcia$egids_matching) %in% languages$Name
+unique(kiddgarcia$egids_matching)[!nm]
 
 ```
 
@@ -248,54 +271,69 @@ This histogram shows the proportion of languages studied by endangerment categor
 
 ```{r}
 plot_prop = languages %>% 
-  group_by(studied, Code_ID) %>% 
+  group_by(studied, EGIDS.int) %>% 
   summarise(n = n(), .groups = 'keep') %>% 
-  mutate(freq = n / sum(n))
+  group_by(studied) %>% 
+  mutate(freq = n / sum(n)) %>%
+  na.omit()
 
 plot_prop$studied = ifelse(plot_prop$studied == 1, "Studied", "Not Studied")
-plot_prop$AES = recode(plot_prop$Code_ID,
-                       `aes-not_endangered` = "Not Endangered",
-                       `aes-threatened` = "Threatened",
-                       `aes-shifting` = "Shifting",
-                       `aes-moribund` = "Moribund",
-                       `aes-nearly_extinct` = "Nearly Asleep",
-                       `aes-extinct` = "Sleeping"
+plot_prop$EGIDS.char = recode(plot_prop$EGIDS.int,
+                       `0` = "International", 
+                       `1` = "National",
+                       `2` = "Regional",
+                       `3` = "Trade",
+                       `4` = "Educational",
+                       `5` = "Written",
+                       `6` = "Vigorous",
+                       `7` = "Threatened",
+                       `8` = "Shifting",
+                       `9` = "Moribund",
+                       `10` = "Nearly Sleeping",
+                       `11` = "Sleeping"
                        )
 
-plot_prop$AES = factor(plot_prop$AES, 
-                       levels = c("Not Endangered", 
+plot_prop$EGIDS.char = factor(plot_prop$EGIDS.char, 
+                       levels = c("International", 
+                                  "National",
+                                  "Regional",
+                                  "Trade",
+                                  "Educational",
+                                  "Written",
+                                  "Vigorous",
                                   "Threatened",
                                   "Shifting",
                                   "Moribund",
-                                  "Nearly Asleep",
+                                  "Nearly Sleeping",
                                   "Sleeping"))
 
 p_base = ggplot(plot_prop,
                 aes(
                   y = freq,
-                  x = AES,
-                  fill = AES,
+                  x = EGIDS.char,
+                  fill = EGIDS.char,
                   group = studied
                 )) +
   geom_bar(stat = 'identity') +
   facet_wrap( ~ studied, nrow = 3) +
   ylab("Proportion of languages") +
-  xlab("AES") +
-  scale_fill_manual(values = c("#00b38a", "#f2ac42", rep("#ea324c", 4))) +
+  xlab("EGIDS") +
+  scale_fill_manual(values = c(rep("#00b38a", 7), "#f2ac42", rep("#ea324c", 4))) +
   theme_classic(base_size = font_size) +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
 
 pp = p_base + geom_bracket(
-  xmin = "Shifting",
+  xmin = "Moribund",
   xmax = "Sleeping",
-  y.position = 0.3,
+  y.position = 0.2,
   tip.length = 0.05,
   vjust = -0.5,
   label = "No children speakers",
   data = data.frame(studied = factor(
     "Not Studied", levels = c("Studied", "Not Studied")
   ),
-  AES = "Sleeping")
+  EGIDS.char = "Sleeping")
 )  +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -356,8 +394,7 @@ hextri_datacleaning = function(df, languages = languages){
     "phonology_sum",
     "morphosyntax_sum",
     "nochildren_strict",
-    "Code_ID",
-    "Value"
+    "EGIDS.int"
   )] 
   
   # If there is a missing value, 
