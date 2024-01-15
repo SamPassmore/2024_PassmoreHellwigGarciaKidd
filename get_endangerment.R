@@ -6,6 +6,8 @@ library(scales)
 
 language_ranges = readRDS("data/lang_polys_merged_cea.rds")
 
+dd = readxl::read_xlsx("data/Bromham_suppdata.xlsx")
+
 df = data.frame(language_ranges)
 
 keep_vars = c("LANG_ISO", "LMP_POP1", "AES", "EGIDS", "L1_POP")
