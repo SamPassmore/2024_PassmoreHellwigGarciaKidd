@@ -1,0 +1,1236 @@
+---
+title: "Child Language Acquisition Diversity & Language Endangerment"
+author: "Sam Passmore & Evan Kidd"
+format: pdf
+editor: visual
+---
+
+
+This document details the data, code, figures, and decisions used in Passmore & Kidd (2024).
+
+Packages necessary for this report:
+
+
+```{r, software, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(patchwork)
+library(forecast)
+
+# To install rcldf:
+# devtools::install_github("SimonGreenhill/rcldf", dependencies = TRUE)
+library(rcldf)
+
+## Parameters
+font_size = 12
+```
+
+
+## Data Sources
+
+There are four key sources of data used in this project:
+
+-   Grambank (Skirgärd, et al. 2023)
+
+-   Phoible (Moran & McCloy, 2019)
+
+-   Paper descriptions from the top four Child Language Acquisition Journals (Evan & Garcia, 2022)
+
+-   Agglomerated Endangerment Scale (AES) (Hammarström et al., 2018)
+
+Grambank, Phoible, and Glottolog are included as submodules as part of the repository, linking directly to their GitHub repositories. We include the data from Evan & Garcia (2022) as a csv file, which is included in this repository, but also available at this repository: <https://osf.io/jmxnw>
+
+### Grambank
+
+Grambank contains the grammatical structure of 2,467 languages, from 215 language families, across 195 features ranging from word order to verbal tense, to nominal plurals (Skirgärd et al., 2023).
+
+For the analysis, we used the GitHub repository created for the Grambank release paper (<https://github.com/grambank/grambank-analysed>), which contains some convenience scripts that we can use in the repository to make our analyses easier. In the Grambank release paper (Skirgard et al. 2023), there is a series of data curation steps that are used to create a dataset ready for analysis. The key steps are:
+
+1\) Limiting data to one dialect per language, leaving 2,430 languages and keeping the dialect with the most complete data.
+
+2\) Converting the six non-binary variables to binary variables, bringing the total to 201 features.
+
+3\) Using random forests to impute the missing data, which totals around 24% of the dataset.
+
+4\) Reducing the dataset to its most complete state (1,509 languages, and 114 features).
+
+These steps are performed within the system command in the text below. More details can be found in the [Grambank release paper](https://www.science.org/doi/10.1126/sciadv.adg6175), or within the [Github repository](https://github.com/grambank/grambank-analysed).
+
+These steps create a datafile where the rows are languages and the columns are Grambank features, which we will use for the multi-dimensional scaling analysis later.
+
+
+```{r, grambank_data}
+# Create the file if it doesn't exist (takes a minute or so)
+gb_dir = "submodule/grambank-analysed/R_grambank"
+if(!file.exists(
+  paste0(gb_dir, "/output/GB_wide/GB_wide_imputed_binarized.tsv")
+  )){
+  system(
+  "cd ./submodule/grambank-analysed/R_grambank/;
+  git submodule update --init
+  mkdir -p output/non_GB_datasets
+	mkdir -p output/coverage_plots
+	mkdir -p output/GB_wide
+	Rscript make_glottolog-cldf_table.R
+	Rscript unusualness/processing/assigning_AUTOTYP_areas.R
+	Rscript make_wide.R
+	Rscript make_wide_binarized.R
+  Rscript impute_missing_values.R | tee impute_missing_values.log")
+}
+
+grambank = read.table(
+  paste0(gb_dir, "/output/GB_wide/GB_wide_imputed_binarized.tsv"),
+  sep = "\t",
+  header = 1
+)
+```
+
+
+### Phoible
+
+PHOIBLE is a repository of cross-linguistic phonological inventory data, which have been extracted from source documents and tertiary databases and compiled into a single searchable convenience sample. It contains the cross-linguistic phonological inventory of 2,186 languages, from 176 language families, and a total of 3,183 segment types. For a detailed description of Phoible, see [Moran (2012)](https://digital.lib.washington.edu/researchworks/handle/1773/22452). The data can be explored at the website: https://phoible.org/
+
+The code below shows how we wrangle to Phoible data into the appropriate format for the multidimensional scaling analysis. Some languages have multiple entries, with varying phonological inventories. We reduce the data to one inventory per language, choosing inventories at random.
+
+
+```{r, phoible_data}
+# phoible data
+p_df = read.csv("submodule/phoible_cldf/cldf/values.csv")
+
+# Some languages have been coded multiple times (doculets)
+# We want to select one inventory per language, 
+# but we make no judgement on which inventory is better. 
+# I.e. Choice of doculet is random. 
+p_ss =  p_df %>% 
+  dplyr::group_by(Language_ID) %>% 
+  dplyr::filter(Inventory_ID == sample(unique(Inventory_ID), 1)) 
+
+# The number of language ids matches the number of Inventory IDs 
+# (i.e. there is one language code per inventory code)
+all(n_distinct(p_ss$Language_ID) == n_distinct(p_ss$Inventory_ID))
+
+# Make the dataset wide, this will build a dataset where columns are 
+# phonemes and rows are languages.
+phoible_wide = pivot_wider(p_ss,
+                      id_cols = Language_ID,
+                      values_from = Value,
+                      names_from = Value)
+
+# This changes the data to a 0 (phoneme is not used) 1 (phoneme is used)
+phoible_df = apply(phoible_wide[, 2:ncol(phoible_wide)], 2, function(x)
+  ifelse(is.na(x), 0, 1))
+phoible = data.frame(Language_ID = phoible_wide$Language_ID, phoible_df)
+```
+
+
+### The Expanded Graded Intergenerational Disruption Scale (EGIDS)
+
+EGIDS is a 13-point scale of endangerment for 7,206 languages, ranging from 1 (Internationally used languages) to 10 (Langauge is no longer used, and no one holds a symbolic sense of identity with the language). There are seven categories of 'safe' languages, a vulnerable category, three increasing levels of endangerment, and two categories of languages that are no longer used. Our data collapses the two sleeping categories.
+
+We draw the EGIDS scale from the supplementary data of Bromham et al (2022). We further amend this dataset to a binary category where languages have children speakers or not. Strictly speaking, this is level 7 and above. However, this is a conservative decision. At level 6b, only some children (i.e. not all) are learning the language.
+
+All levels are detailed in the table below:
+
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| **LEVEL** | **LABEL**      | **DESCRIPTION**                                                                                                                                      | UNESCO                |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 0         | International  | "The language is used internationally for a broad range of functions."                                                                               | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 1         | National       | "The language is used in education, work, mass media, government at the nationwide level."                                                           | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 2         | Regional       | "The language is used for local and regional mass media and governmental services."                                                                  | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 3         | Trade          | "The language is used for local and regional work by both insiders and outsiders."                                                                   | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 4         | Educational    | "Literacy in the language is being transmitted through a system of public education."                                                                | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 5         | Written        | "The language is used orally by all generations and is effectively used in written form in parts of the community."                                  | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 6a        | Vigorous       | "The language is used orally by all generations and is being learned by children as their first language."                                           | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 6b        | Threatened     | "The language is used orally by all generations but only some of the child-bearing generation are transmitting it to their children."                | Vulnerable            |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 7         | Shifting       | "The child-bearing generation knows the language well enough to use it among themselves but non are transmitting it to their children."              | Definitely Endangered |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 8a        | Moribund       | "The only remaining active speakers of the language are members of the grandparent generation."                                                      | Severely Endangered   |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 8b        | Nearly Extinct | "The only remaining speakers of the language are members of the grandparent generation or older who have little opportunity to use the language." \| | Critically Endangered |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 9         | Dormant        | "The language serves as a reminder of heritage identity for an ethnic community. No one has more than symbolic proficiency."                         | Sleeping              |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 10        | Sleeping       | "No one retains a sense of ethnic identify associated with the language, even for symbolic purposes."                                                | Sleeping              |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+
+: Table of the Expanded Graded Intergenerational Disruption Scale, reproduced from Lewis and Simons (2010).
+
+
+```{r, endangerment_scale, warning=FALSE}
+languages = read.csv("processed_data/language_endangerment.csv")
+
+# How many languages are not being taught to children
+# See table of level descriptions here: https://en.wikipedia.org/wiki/Expanded_Graded_Intergenerational_Disruption_Scale
+nochildren_levels = c("6b", "7", "8a", "8b", "9")
+nochildren_levels2 = c("7", "8a", "8b", "9")
+
+## No children learners or not
+languages$nochildren = ifelse(languages$EGIDS %in% nochildren_levels, 1, 0)
+languages$nochildren_strict = ifelse(languages$EGIDS %in% nochildren_levels2, 1, 0)
+```
+
+
+### Glottolog & the Agglomerated Endangerment Scale (AES)
+
+The AES scale is part of the Glottolog datatset. Here, we download that dataset, extract the AES value, and attach it to the language metadata file from Glottolog.
+
+The AES scale is an agglomeration of three different scales of languages endangerment: [UNESCO Atlas of the World's languages in Danger](https://www.unesco.org/languages-atlas/); [Ethnologue's Expanded Graded Intergenerational Disruption Scale (EGIDS; 20th edition)](https://www.sil.org/resources/archives/78578); and [The Catalogue of Endangered Languages Language Endangerment Index (ElCat)](http://endangeredlanguages.com/userquery/download/)
+
+For details on the construction of each scale, and the construction of the agglomorative scale we use here, see details in Hammarström et al. (2018).
+
+Endangerment ratings are preferred in the following order, starting with ELCat:
+
+ELCat \> UNESCO \> E20 \> Glottolog \> Unknown
+
+The levels of endangerment in the AES scale are described in the table below:
+
++-----------------------+-----------------------+--------------------------+--------------------+
+| UNESCO                | LEI (ElCat)           | EGIDS                    | AES                |
++=======================+=======================+==========================+====================+
+| safe                  | at risk               | 1 (National)             | **Not endangered** |
+|                       |                       |                          |                    |
+|                       |                       | 2 (Regional)             |                    |
+|                       |                       |                          |                    |
+|                       |                       | 3 (Trade)                |                    |
+|                       |                       |                          |                    |
+|                       |                       | 4 (Educational)          |                    |
+|                       |                       |                          |                    |
+|                       |                       | 5 (Written)              |                    |
+|                       |                       |                          |                    |
+|                       |                       | 6a (Vigorous)            |                    |
++-----------------------+-----------------------+--------------------------+--------------------+
+| vulnerable            | vulnerable            | 6b (Threatened)          | **Threatened**     |
++-----------------------+-----------------------+--------------------------+--------------------+
+| definitely endangered | threatened endangered | 7 (Shifting)             | **Shifting**       |
++-----------------------+-----------------------+--------------------------+--------------------+
+| severely endangered   | severely endangered   | 8a (Moribund)            | **Moribund**       |
++-----------------------+-----------------------+--------------------------+--------------------+
+| critically endangered | critically endangered | 8b (Nearly extinct)      | **Nearly extinct** |
++-----------------------+-----------------------+--------------------------+--------------------+
+| extinct               | dormant awakening     | 9 (Dormant)              | **Extinct**        |
+|                       |                       |                          |                    |
+|                       |                       | 9 (Reawakening)          |                    |
+|                       |                       |                          |                    |
+|                       |                       | 9 (Second language only) |                    |
+|                       |                       |                          |                    |
+|                       |                       | 10 (Extinct)             |                    |
++-----------------------+-----------------------+--------------------------+--------------------+
+
+: Mappings between the endangerment categories in the source databases and the Agglomerated Endangerment Scale (AES). (A recreation of Table 7 in Hammarström et al. (2018))
+
+We create an additional variable determining whether a language is expected to have children speakers based on their endangerment level. With respect to the AES descriptions, we describe this as 'shifting' or greater. In all scales, 'shifting' is the level where the description requires that no children are learning the language and therefore, are languages inaccessible to child language acquisition.
+
+
+```{r, glottolog, message=FALSE}
+glottolog =
+  cldf("https://github.com/glottolog/glottolog-cldf/archive/refs/tags/v4.8.zip")
+
+glottolog_languages = glottolog$tables$LanguageTable
+```
+
+
+### Kidd & Garcia (2022)
+
+The supplementary material of Kidd & Garcia have a list of all papers published in the top four child language acquisition journals - including metadata for the language spoken - available here <https://osf.io/jmxnw>. We have extracted a list of unique languages studied, and the number of papers written about that language into a csv file below. The names used to describe languages have been manually curated to match with the Glottolog dataset. An example of a curated match is ensure languages like *Tongan* in Kidd & Garcia, matches with *Tongan (Tonga Island)* in Glottolog. We require exact matches.
+
+Some languages listed in Kidd & Garcia were not listed in the EGIDS dataset. These languages are listed below.
+
+
+```{r warning=FALSE}
+# Raw data from Kidd & Garcia 2022
+kiddgarcia = read.csv('data/journal_archive_data_2021.csv', sep = ";") 
+# Matched data 
+kiddgarcia_matching = read.csv("processed_data/name_matching.csv")
+kiddgarcia = left_join(kiddgarcia, kiddgarcia_matching, by = "language")
+
+# Make sure we count each language once for each paper 
+## The data is in long format so if a paper is about morphosyntax and pragmatics in English, 
+## English will be listed across two rows. 
+kiddgarcia_counts = kiddgarcia %>% 
+  distinct(title, year, volume, issue, journal, egids_matching, .keep_all = TRUE) %>% 
+  group_by(egids_matching) %>% 
+  summarise(count = n()) %>% 
+  na.omit()
+
+languages = left_join(languages, kiddgarcia_counts, 
+                      by = c("Name" = "egids_matching"))
+
+# Languages that have been studied have a paper count
+languages$studied = ifelse(is.na(languages$count), 0, 1)
+
+# Languages that have had a phonological or morphosyntax study about them
+kiddgarcia_topics = kiddgarcia %>%
+  group_by(language) %>%
+  mutate(
+    phonology_bin = ifelse(topic == "Phonology", 1, 0),
+    morphosyntax_bin = ifelse(topic == "Morphosyntax", 1, 0)
+  ) %>%
+  summarise(
+    phonology_sum = sum(phonology_bin, na.rm = TRUE),
+    phonology_studied = phonology_sum > 0,
+    morphosyntax_sum = sum(morphosyntax_bin, na.rm = TRUE),
+    morphosyntax_studied = morphosyntax_sum > 0
+  ) %>%
+  na.omit() %>%
+  left_join(kiddgarcia_matching, by = "language") %>%
+  select(
+    egids_matching,
+    phonology_sum,
+    phonology_studied,
+    morphosyntax_sum,
+    morphosyntax_studied
+  )
+
+languages = left_join(languages, kiddgarcia_topics, 
+                      by = c("Name" = "egids_matching"))
+
+# Are all languages matched? 
+sum(!is.na(languages$count)) == nrow(kiddgarcia_matching)
+  
+# find un-matched languages
+nm = unique(kiddgarcia$egids_matching) %in% languages$Name
+unique(kiddgarcia$egids_matching)[!nm]
+
+```
+
+
+# Analysis & Figures
+
+This section contains graphs used in the main text, as well as alternative depictions of the data.
+
+## Histogram
+
+This histogram shows the proportion of languages studied by endangerment category, split by whether the languages have been studied or not, according to Kidd & Garcia (2022).
+
+
+```{r}
+
+global_prop = languages %>% 
+  group_by(EGIDS.int) %>% 
+  summarise(n = n(), .groups = 'keep') %>% 
+  ungroup() %>% 
+  mutate(freq = n / sum(n)) %>%
+  na.omit()
+
+global_prop$studied = 0
+
+studied_prop = languages %>% 
+  group_by(studied, EGIDS.int) %>% 
+  summarise(n = n(), .groups = 'keep') %>% 
+  group_by(studied) %>% 
+  mutate(freq = n / sum(n)) %>%
+  na.omit()
+
+plot_prop = bind_rows(global_prop, studied_prop[studied_prop$studied == 1,])
+
+plot_prop$studied =
+  ifelse(plot_prop$studied == 1,
+         "Studied Distribution",
+         "Global Distribution")
+plot_prop$EGIDS.char = recode(plot_prop$EGIDS.int,
+                       `0` = "International", 
+                       `1` = "National",
+                       `2` = "Regional",
+                       `3` = "Trade",
+                       `4` = "Educational",
+                       `5` = "Written",
+                       `6` = "Vigorous",
+                       `7` = "Threatened",
+                       `8` = "Shifting",
+                       `9` = "Moribund",
+                       `10` = "Nearly Sleeping",
+                       `11` = "Sleeping"
+                       )
+
+plot_prop$EGIDS.char = factor(plot_prop$EGIDS.char, 
+                       levels = c("International", 
+                                  "National",
+                                  "Regional",
+                                  "Trade",
+                                  "Educational",
+                                  "Written",
+                                  "Vigorous",
+                                  "Threatened",
+                                  "Shifting",
+                                  "Moribund",
+                                  "Nearly Sleeping",
+                                  "Sleeping"))
+
+p_base = ggplot(plot_prop,
+                aes(
+                  y = freq,
+                  x = EGIDS.char,
+                  fill = EGIDS.char,
+                  group = studied
+                )) +
+  geom_bar(stat = 'identity') +
+  facet_wrap( ~ studied, nrow = 3) +
+  ylab("Proportion of languages") +
+  xlab("EGIDS") +
+  scale_fill_manual(values = c(rep("#00b38a", 7), "#f2ac42", rep("#ea324c", 4))) +
+  theme_classic(base_size = font_size) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+pp = p_base + geom_bracket(
+  xmin = "Moribund",
+  xmax = "Sleeping",
+  y.position = 0.1,
+  tip.length = 0.05,
+  vjust = -0.5,
+  label = "No children speakers",
+  data = data.frame(studied = factor(
+    "Global Distribution", levels = c("Studied Distribution",
+         "Global Distribution")
+  ),
+  EGIDS.char = "Sleeping")
+)  +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(plot = pp, filename = "figures/histogram.png", height = 5)
+
+pp
+
+# Proportion of unstudied langauges that are written, vigorous, or threatened
+unstud_prop = studied_prop %>% 
+  filter(studied == 0 & EGIDS.int >= 5) %>% 
+  summarise(sum(freq))
+
+```
+
+
+The majority of unstudied languages in the Kidd & Garcia (2022) data set are categorised as written, vigorous, or threatened (`r round(unstud_prop, 2) * 100`%).
+
+## Hexbin graphs
+
+To build the Hexbin projections of linguistic diversity, there are four key steps:
+
+1\) Match our dataset of studied languages (Kidd & Garcia 2022), to the Phoible and Grambank datasets
+
+2\) Build a distance matrix between all languages
+
+3\) Run the multidimensional scaling algorithm
+
+4\) Plot and bin the results.
+
+To plot the results, we are required to get custom ggplot code, which has been included in this repository. The custom code was created thanks to [Allan Cameron via Stackoverflow](https://stackoverflow.com/questions/76709204/using-hexbins-to-show-proportion-of-categorical-variables-like-in-hextri).
+
+We do this for the Grambank and Phoible dataset, and for a variety of settings. First, we plot the raw data from the MDS algorithm. Second we plot the data in bins, with no markings. The next plots highlight bins containing studied languages, first on a raw scale, then on a log scale. We also combine these to create hexbin plot found in the main text. Finally, we create the same plots comparing the spaces studied to unstudied.
+
+At the end of this code block, we show a table containing the languages codes which are dropped from the datasets. Unmatched languages largely occur because Grambank or Phoible identifies a dialect, and Kidd & Garcia contain metadata on languages, or because no data exists in the datasets. In both datasets, dropped languages make up less than 1% of the total sample.
+
+
+```{r}
+# Read in custom Hextri code
+source("hextri_grobs.R")
+
+## Build the pipeline as a function
+hextri_datacleaning = function(df, languages = languages){
+  # Give data rownames to carry through the analysis
+  rownames(df) = df$Language_ID
+  
+  # Make distance matrix
+  distance_matrix = df %>% 
+    dplyr::select(-Language_ID) %>%
+    cluster::daisy(metric = "gower", warnBin = FALSE) 
+  
+  # Build Multi-dimensional scaling output
+  mds_output = distance_matrix %>% 
+    cmdscale(eig=TRUE, k=2) 
+  
+  # Wrangle into a dataframe
+  mds_points = data.frame(mds_output$points)
+  colnames(mds_points) = c("MDS.X", "MDS.Y")
+  mds_points$Glottocode = rownames(mds_points)
+
+  # Join Endangerment and Studied data
+  plot_df = left_join(mds_points, languages, by = "Glottocode")
+  plot_df = plot_df[, c(
+    "Name",
+    "Glottocode",
+    "MDS.X",
+    "MDS.Y",
+    "count",
+    "phonology_sum",
+    "morphosyntax_sum",
+    "nochildren_strict",
+    "EGIDS.int"
+  )] 
+  
+  # If there is a missing value, 
+  # it means no papers were published in the journals reviewed
+  plot_df$count[is.na(plot_df$count)] = 0
+  plot_df$phonology_sum[is.na(plot_df$phonology_sum)] = 0
+  plot_df$morphosyntax_sum[is.na(plot_df$morphosyntax_sum)] = 0
+  
+  # Ensure we don't have any missing data otherwise GGplot will complain 
+  plot_df = plot_df[complete.cases(plot_df),]
+  
+  # If a language has at leaast one paper, then it is a studied langauge
+  plot_df$studied = ifelse(plot_df$count > 1, 1, 0)
+
+  # Reverse code the binary variable so that a value of 1 indicates that a 
+  # language has children speakers
+  plot_df$children = 1 - plot_df$nochildren
+
+  # Return plot dataframe
+  plot_df
+}
+
+set.seed(1234)
+# Run pipeline for each dataset
+plot_phoible = hextri_datacleaning(phoible, languages = languages)
+plot_grambank = hextri_datacleaning(grambank, languages = languages)
+
+# remove outlier 
+plot_phoible = plot_phoible[plot_phoible$MDS.X > -0.04,]
+
+# unmatched data 
+phoible$Language_ID[!phoible$Language_ID %in% plot_phoible$Glottocode]
+grambank$Language_ID[!grambank$Language_ID %in% plot_grambank$Glottocode]
+```
+
+
+### No-bin Plots
+
+
+```{r}
+p1_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, col = factor(children))) + 
+  geom_point(aes(shape = factor(studied), size = phonology_sum + 1), alpha = 0.5) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  guides(col=guide_legend(title="Children Speakers"),
+         shape=guide_legend(title="Studied")) + 
+  ggtitle("Phoible") + 
+  xlab("") + ylab("")
+
+p1_grambank = ggplot(plot_grambank, 
+                     aes(MDS.X, MDS.Y, col = factor(children))) + 
+  geom_point(aes(shape = factor(studied), size = morphosyntax_sum + 1), alpha = 0.5) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  guides(col=guide_legend(title="Children Speakers"),
+         shape=guide_legend(title="Studied")) + 
+  ggtitle("Grambank") + 
+  xlab("") + ylab("")
+
+(p1_phoible | p1_grambank) + 
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'bottom')
+
+```
+
+
+### Hexbin Plots
+
+
+```{r}
+n_bins = 14
+
+p2_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = n_bins) + 
+  geom_hex(fill = NA, color = "white", bins = n_bins, lwd = 0.01) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Phoible") + 
+  xlab("") + ylab("")
+
+p2_grambank = ggplot(plot_grambank, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.01, bins = n_bins) + 
+  geom_hex(fill = NA, color = "white", bins = n_bins, lwd = 0.01) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Grambank") + 
+  xlab("") + ylab("")
+
+(p2_phoible | p2_grambank) + 
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'bottom')
+
+```
+
+
+### Hexbin & Studied Languages Plots
+
+
+```{r}
+p3_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = 15) + 
+  geom_hex(fill = NA, color = "white", bins = 15, lwd = 0.05) +
+  stat_summary_hex(aes(
+    z = phonology_sum,
+    linewidth = after_stat(value),
+  ), fun = ~ sum((.x[.x > 0])), col = "black", fill = NA, bins = 15) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  # guides(fill=guide_legend(title="Children Speakers"),
+  #        linewidth=guide_legend(title="N Papers"),
+  #        alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Phoible") + 
+  theme(legend.position = "none") + 
+  xlab("") + ylab("")
+
+p3_grambank = ggplot(plot_grambank, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = 15) + 
+  geom_hex(fill = NA, color = "white", bins = 15, lwd = 0.05) +
+  stat_summary_hex(aes(
+    z = morphosyntax_sum,
+    linewidth = after_stat(value),
+  ), fun = ~ sum((.x[.x > 0])), col = "black", fill = NA, bins = 15) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3), 
+                  breaks = c(0, 250, 500, 1000)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="N Papers"),
+         alpha=guide_legend(title="N Languages")) +
+  ggtitle("Grambank") + 
+  xlab("") + ylab("")
+
+p3 = (p3_phoible | p3_grambank) 
+
+p3
+
+```
+
+
+Next we extract the count data for each cell
+
+### Hexbin & Studied Languages (Log Scale) Plots
+
+
+```{r}
+p4_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = 15) + 
+  geom_hex(fill = NA, color = "white", bins = 15, lwd = 0.05) +
+  stat_summary_hex(aes(
+    z = count,
+    linewidth = after_stat(value),
+  ), fun = ~ sum((.x[.x > 0])), col = "black", fill = NA, bins = 15) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3), trans = scales::pseudo_log_trans(base = 10)) +
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  # guides(fill=guide_legend(title="Children Speakers"),
+  #        linewidth=guide_legend(title="N Papers"),
+  #        alpha=guide_legend(title="N Languages")) + 
+  theme(legend.position = "none") + 
+  ggtitle("Phoible") + 
+  xlab("") + ylab("")
+
+p4_grambank = ggplot(plot_grambank, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = 15) + 
+  geom_hex(fill = NA, color = "white", bins = 15, lwd = 0.05) +
+  stat_summary_hex(aes(
+    z = count,
+    linewidth = after_stat(value),
+  ), fun = ~ sum(.x[.x > 0]), col = "black", fill = NA, bins = 15) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3), 
+                  trans = scales::pseudo_log_trans(base = 10), 
+                  breaks = c(0, 10, 100, 1000)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+                    labels = c("No", "Yes")) + 
+  guides(linewidth=guide_legend(title="Log N Papers")) + 
+  ggtitle("Grambank") + 
+  xlab("") + ylab("")
+
+p4 = (p4_phoible + p4_grambank) 
+
+p4
+
+ggsave(plot = p4, filename = "figures/hexbinplots_logscale.png", 
+       height = 297 / 1.95, 
+       width = 210, 
+       units = "mm")
+
+fig1 = p3 / p4 + plot_layout(guides = "collect") &
+  theme(legend.direction = "vertical",
+        legend.box = "vertical") &
+  guides(fill = guide_legend(order = 1, title="Children Speakers"), 
+         alpha = guide_legend(order = 2, title="N Languages"),
+         )
+
+fig1
+
+ggsave(plot = fig1, filename = "figures/hexbinplots_stacked.png", 
+       height = 297 / 1.95, 
+       width = 210, 
+       units = "mm")
+```
+
+
+## Summary Statistics
+
+Here, we extract the summary information from the plots, for discussion in the text.
+
+
+```{r}
+### Count data ### 
+papercount_pb = layer_data(p3_phoible, 3)
+papercount_gb = layer_data(p3_grambank, 3)
+
+# count per cell
+tail(sort(papercount_pb$value), 10)
+tail(sort(papercount_gb$value), 10)
+
+# How many cells are studied vs unstudied
+sum(papercount_pb$value > 0) / length(papercount_pb$value)
+sum(papercount_gb$value > 0) / length(papercount_gb$value)
+
+# how many studied cells have less than 10 papers
+pb.10 = sum(papercount_pb$value <= 10 & papercount_pb$value != 0)
+gb.10 = sum(papercount_gb$value <= 10 & papercount_gb$value != 0)
+
+pb.10p = pb.10 / sum(papercount_pb$value != 0)
+gb.10p = gb.10 / sum(papercount_gb$value != 0)
+
+cat("There are", pb.10, "cells in Phoible that have less than 10 papers (",  
+    scales::percent(pb.10p), ").", 
+    "and there are", gb.10, 
+    "cells in Grambank (", scales::percent(gb.10p), ")")
+
+# Most studied cell as a proportion
+max(papercount_pb$value) / sum(papercount_pb$value)
+max(papercount_gb$value) / sum(papercount_gb$value)
+
+# Proportion per cell
+tail(sort(round(papercount_pb$value / sum(papercount_pb$value), 3)), 10)
+tail(sort(round(papercount_gb$value / sum(papercount_gb$value), 3)), 10)
+
+# extract data from ggplot
+pb_pdata.1 = layer_data(p3_phoible, 1)
+gb_pdata.1 = layer_data(p4_grambank, 1)
+
+pb_pdata.2 = layer_data(p3_phoible, 2)
+gb_pdata.2 = layer_data(p4_grambank, 2)
+
+pb_pdata.3 = layer_data(p3_phoible, 3)
+gb_pdata.3 = layer_data(p4_grambank, 3)
+
+# Hexbins counts
+# number of bins
+n_bins.pb = nrow(pb_pdata.2)
+n_bins.gb = nrow(gb_pdata.2)
+
+# number of studied bins
+s_bins.pb = sum(pb_pdata.3$value > 0)
+s_bins.gb = sum(gb_pdata.3$value > 0)
+
+s_bins.pbp = s_bins.pb / nrow(pb_pdata.2)
+s_bins.gbp = s_bins.gb / nrow(gb_pdata.2)
+
+cat("There are", n_bins.pb, "in the Phoible plot.",
+    s_bins.pb, "have been studied (", scales::percent(s_bins.pbp), ").")
+
+cat("There are", n_bins.gb, "in the Grambank plot.",
+    s_bins.gb, "have been studied (", scales::percent(s_bins.gbp), ").")
+```
+
+
+### Hexbin Plots: Studied vs Unstudied
+
+#### Phoible
+
+
+```{r}
+# Only show studied diversity
+p5.1_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = n_bins) + 
+  stat_summary_hex(aes(
+    z = count,
+    fill = factor(after_stat(value) > 0)
+  ), fun = ~ sum(log(.x[.x > 0])), col = NA, bins = n_bins) +
+  geom_hex(fill = NA, color = "white", bins = n_bins, lwd = 0.5) +
+  coord_equal() +
+  theme_classic(base_size = font_size) +
+  theme(aspect.ratio = 1, legend.position = "right") +
+  scale_linewidth(range = c(0, 3)) +
+  scale_alpha(range = c(0.2, 2)) + 
+  scale_fill_manual(
+    values = c("#ea324c", "#00b38a", "white", "transparent"), 
+    labels = c("No", "Yes", "", "")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Studied") + 
+  xlab("") + ylab("")
+
+
+## Only show studied undiversity
+p5.2_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = 15) + 
+  stat_summary_hex(aes(
+    z = count,
+    fill = factor(after_stat(value) > 0)
+  ), fun = ~ sum(log(.x[.x > 0])), col = NA, bins = 15) +
+  geom_hex(fill = NA, color = "white", bins = 15, lwd = 0.5) +
+  # # geom_point(aes(shape = factor(studied))) +
+  coord_equal() +
+  theme_classic(base_size = font_size) +
+  theme(aspect.ratio = 1, legend.position = "right") +
+  scale_linewidth(range = c(0, 3)) +
+  scale_alpha(range = c(0.2, 2)) + 
+  scale_fill_manual(
+    values = c("#ea324c", "#00b38a", "transparent", "white"), 
+    labels = c("No", "Yes", "", "")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Unstudied") + 
+  xlab("") + ylab("")
+
+(p5.1_phoible + p5.2_phoible) + 
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'bottom')
+
+```
+
+
+#### Grambank
+
+
+```{r}
+# Only show studied diversity
+p5.1_grambank = ggplot(plot_grambank, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = n_bins) + 
+  stat_summary_hex(aes(
+    z = count,
+    fill = factor(after_stat(value) > 0)
+  ), fun = ~ sum(log(.x[.x > 0])), col = NA, bins = n_bins) +
+  geom_hex(fill = NA, color = "white", bins = n_bins, lwd = 0.5) +
+  coord_equal() +
+  theme_classic(base_size = font_size) +
+  theme(aspect.ratio = 1, legend.position = "right") +
+  scale_linewidth(range = c(0, 3)) +
+  scale_alpha(range = c(0.2, 2)) + 
+  scale_fill_manual(
+    values = c("#ea324c", "#00b38a", "white", "transparent"), 
+    labels = c("No", "Yes", "", "")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Studied") + 
+  xlab("") + ylab("")
+
+
+## Only show studied undiversity
+p5.2_grambank = ggplot(plot_grambank, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = 15) + 
+  stat_summary_hex(aes(
+    z = count,
+    fill = factor(after_stat(value) > 0)
+  ), fun = ~ sum(log(.x[.x > 0])), col = NA, bins = 15) +
+  geom_hex(fill = NA, color = "white", bins = 15, lwd = 0.5) +
+  # # geom_point(aes(shape = factor(studied))) +
+  coord_equal() +
+  theme_classic(base_size = font_size) +
+  theme(aspect.ratio = 1, legend.position = "right") +
+  scale_linewidth(range = c(0, 3)) +
+  scale_alpha(range = c(0.2, 2)) + 
+  scale_fill_manual(
+    values = c("#ea324c", "#00b38a", "transparent", "white"), 
+    labels = c("No", "Yes", "", "")) +
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) + 
+  ggtitle("Unstudied") + 
+  xlab("") + ylab("")
+
+(p5.1_grambank + p5.2_grambank) + 
+  plot_layout(guides = 'collect') & 
+  theme(legend.position = 'bottom')
+
+```
+
+
+## Language Endangerment & ARIMA models
+
+First, we show how many languages are shifting between different EGIDS endangerment categories, based on the supplementary material from Bromham et al. (2022).
+
+
+```{r}
+bromham_probabilities = readxl::read_xlsx("data/Bromham_suppdata.xlsx",
+                                          sheet = 4,
+                                          skip = 2)
+colnames(bromham_probabilities)[1] = "ISO"
+
+bromham_2060 = bromham_probabilities %>%
+  select(ISO, contains("40"))
+
+bromham_2060$EGIDS.value =
+  apply(bromham_2060[, 2:ncol(bromham_2060)], 1, function(x)
+    names(x)[x == max(x)])
+bromham_2060$EGIDS.value = case_match(
+  bromham_2060$EGIDS.value,
+  "P[Y=1].40" ~ 1,
+  "P[Y=2].40" ~ 2,
+  "P[Y=5].40" ~ 5,
+  "P[Y=7].40" ~ 7
+)
+
+# Current EGIDS score vs Predicted EGIDS score in 40 years time
+bromham_nowvs40y = data.frame(
+  now = bromham_probabilities$`1=1-6a, 2=6b, 3=7, 4=8a, 5=8b, 6=9, 7=10`,
+  future = bromham_2060$EGIDS.value
+)
+
+# 3 represents EGIDS level 7 which is described as:
+# The child-bearing generation knows the language well enough 
+# to use it among themselves but none are transmitting it to their children.
+# I.e. no children are speaking the language
+table(bromham_nowvs40y$now)
+table(bromham_nowvs40y$future)
+
+table(bromham_nowvs40y$now >= 3)
+table(bromham_nowvs40y$future >= 3)
+
+sum(bromham_nowvs40y$now > bromham_nowvs40y$future)
+sum(bromham_nowvs40y$now < bromham_nowvs40y$future)
+
+
+bromham_summary = bromham_2060 %>% 
+  group_by(EGIDS.value) %>% 
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n))
+
+bromham_summary = data.frame(studied = "2060",
+                             EGIDS = bromham_summary$EGIDS.value,
+                             n = bromham_summary$n,
+                             freq = bromham_summary$freq)
+
+```
+
+
+To show how many new languages are being studied, and how that might be projected into the future, we use a simple ARIMA model of the number of new langauges studied each year, predicted by the number of papers published per year. We calculate how many more papers are being published per year.
+
+
+```{r}
+# What languages are studied in what year
+years = split(kiddgarcia$language, f = kiddgarcia$year)
+
+# Determine which years new languages were studied
+by_year = data.frame(year = names(years))
+by_year$total_languages = NA
+
+# How many languages were studied in year 1
+# which languages 
+studied_languages = unique(years[[1]]) 
+# number of unique languages
+by_year$total_languages[1] = n_distinct(studied_languages) 
+
+for(i in 2:length(years)){
+  # what languages were studied this year
+  new_year = unique(years[[i]])
+  
+  # How many of those are new languages
+  new_total = by_year$total_languages[i - 1] + 
+    sum(!new_year %in% studied_languages)
+  by_year$total_languages[i] = new_total
+  
+  # add the new languages to the studied languages pile 
+  new_languages = new_year[!new_year %in% studied_languages]
+  studied_languages = c(studied_languages, new_languages)
+}
+
+# Calculate the number of new languages studied within each year
+by_year$new_langs = c(7, diff(by_year$total_languages))
+
+# calculate the number of papers studied in each year 
+papers_byyear = kiddgarcia %>% 
+  distinct(title, issue, volume, year) %>% 
+  group_by(year) %>% 
+  summarise(n_articles = n()) %>% 
+  mutate(year = as.character(year))
+
+by_year = left_join(by_year, papers_byyear, by = "year")
+
+# check final value is right
+by_year$total_languages[nrow(by_year)] == n_distinct(kiddgarcia$language)
+
+## Paper summary over time
+# Papers per year between 1980 and 2000
+by_year %>% filter(year >= 1980 &
+                     year <= 2000) %>% 
+  pull(n_articles) %>% 
+  summary()
+
+# Papers per year between 2001 and 2020
+by_year %>% filter(year >= 2001 &
+                     year <= 2021) %>% 
+  pull(n_articles) %>% 
+  summary()
+
+summary(by_year$n_articles - lag(by_year$n_articles))
+
+#### Model ####
+ts_data = ts(by_year, start = c(1974, 1), frequency = 1)
+
+ARIMAfit = forecast::tslm(new_langs ~ n_articles, data = ts_data)
+summary(ARIMAfit)
+
+```
+
+
+The ARIMA model shows that there is no significant relationship between the increase in the number of papers being published and the number of new languages being studied.
+
+### Plot ARIMA
+
+
+```{r warning=FALSE, message=FALSE}
+future_forcasts =
+  forecast(ARIMAfit,
+           newdata = data.frame(
+             year = 2021:2060,
+             n_articles = rnorm(40, mean = 130, sd = 5)
+           ))
+
+plot_arima = data.frame(
+  year = as.numeric(by_year$year),
+  newlanguages_year = by_year$new_langs,
+  newpapers_year = by_year$n_articles
+)
+
+plot_arima$cumsum_languages = cumsum(plot_arima$newlanguages_year)
+
+plot_arima_pred = data.frame(
+  year = c(future_forcasts$newdata$year),
+  newlanguages_year = c(future_forcasts$mean),
+  newlanguages_yearL = c(future_forcasts$lower[,1]),
+  newlanguages_yearU = c(future_forcasts$upper[,1])
+)
+
+base_2020 = tail(plot_arima$cumsum_languages, 1)
+
+plot_arima_pred$cumsum_languages = 
+  cumsum(plot_arima_pred$newlanguages_year) + base_2020
+plot_arima_pred$cumsum_languagesL = 
+  cumsum(plot_arima_pred$newlanguages_yearL) + base_2020
+plot_arima_pred$cumsum_languagesU = 
+  cumsum(plot_arima_pred$newlanguages_yearU) + base_2020
+
+## Accounting for expected langauges loss
+# 72 languages a year shifting to no children speakers
+cumulativeloss_children = cumsum(rep(72, nrow(plot_arima_pred) - 1))
+starting_point = tail(plot_arima$cumsum_languages, 1)
+plot_arima_pred$cumsum_languages_nochildren = 
+  c(starting_point,
+    plot_arima_pred$cumsum_languages[2:nrow(plot_arima_pred)] - 
+      cumulativeloss_children)
+
+plot_arima_pred$cumsum_languages_nochildrenU =
+  c(starting_point,
+    plot_arima_pred$cumsum_languagesU[2:nrow(plot_arima_pred)] - 
+      cumulativeloss_children)
+
+plot_arima_pred$cumsum_languages_nochildrenL =
+  c(starting_point,
+    plot_arima_pred$cumsum_languagesL[2:nrow(plot_arima_pred)] - 
+      cumulativeloss_children)
+
+# ggplot wont draw any error lines if they fall outside the plotting area
+# So we alter the last values to the edge of the plotting zone
+plot_arima_pred$cumsum_languages_nochildren[3] = 5
+plot_arima_pred$cumsum_languages_nochildrenL[3] = 0.1
+plot_arima_pred$cumsum_languages_nochildrenU[3] = 10
+
+# 12 languages a year becoming endangered
+cumulativeloss_endangered = cumsum(rep(12, nrow(plot_arima_pred) - 1))
+
+plot_arima_pred$cumsum_languages_endangered = 
+  c(starting_point,
+    plot_arima_pred$cumsum_languages[2:nrow(plot_arima_pred)] - 
+      cumulativeloss_endangered)
+
+plot_arima_pred$cumsum_languages_endangeredU = c(starting_point,
+    plot_arima_pred$cumsum_languagesU[2:nrow(plot_arima_pred)] - 
+      cumulativeloss_endangered)
+
+plot_arima_pred$cumsum_languages_endangeredL = 
+  c(starting_point, 
+    plot_arima_pred$cumsum_languagesL[2:nrow(plot_arima_pred)] - 
+      cumulativeloss_endangered)
+
+# ggplot wont draw any error lines if they fall outside the plotting area
+# So we alter the last values to the edge of the plotting zone
+
+plot_arima_pred$cumsum_languages_endangeredL[10:16] = 0.1
+plot_arima_pred$cumsum_languages_endangered[12:16] = 0.1
+
+# No NAs to avoid GGplot messages 
+plot_arima_pred[plot_arima_pred < 0] = NA
+
+pp.1 = 
+  ggplot(data = plot_arima, 
+         aes(x = year, y = cumsum_languages, group = 1)) + 
+  geom_line() + 
+  # Predicted increase
+  geom_smooth(data = plot_arima_pred, 
+              aes(y = cumsum_languages, x = year, 
+                  ymin = cumsum_languagesL, ymax = cumsum_languagesU),
+              col = "grey", stat = "identity", alpha = 0.5) + 
+  theme_classic(base_size = font_size) + 
+  # Children spoken languages losees
+  geom_line(data = plot_arima_pred,
+            aes(x = year, y = cumsum_languages_nochildren), 
+            col = "#ea324c", lty = "dashed") +
+  geom_smooth(data = plot_arima_pred,
+              aes(x = year, y = cumsum_languages_nochildren, 
+                  ymin = cumsum_languages_nochildrenL, 
+                  ymax = cumsum_languages_nochildrenU),
+              fill = "#ea324c", stat = "identity", linetype=0) +
+  # Spoken Language plot_arima_pred
+  geom_line(data = plot_arima_pred, 
+            aes(x = year, y = cumsum_languages_endangered),
+            col = "#f2ac42", lty = "dotted") +
+  geom_smooth(data = plot_arima_pred,
+              aes(x = year, y = cumsum_languages_endangered, 
+                  ymin = cumsum_languages_endangeredL, 
+                  ymax =cumsum_languages_endangeredU),
+              fill = "#f2ac42", stat = "identity", linetype=0) +
+  xlab("Years") +
+  ylab("N languages studied") + 
+  geom_vline(aes(xintercept = 2020.5), col = "grey", lty = "dashed") + 
+  ggtitle("Predicted Increase in number of languages studied",
+          subtitle = "Against predicted rate of language loss") + 
+  ylim(c(0, 310))
+
+pp.1
+```
+
+
+### Plot ARIMA & N Papers published
+
+
+```{r warnings=FALSE, message=FALSE}
+plot_arima$cumsum_papers = cumsum(plot_arima$newpapers_year)
+
+pp.2 = 
+  ggplot(data = plot_arima, 
+         aes(x = year, y = newlanguages_year, group = 1)) + 
+  geom_line() + 
+  # Number of papers per year
+  geom_col(aes(x = year, y = newpapers_year), alpha = 0.4) +
+  theme_classic(base_size = font_size) + 
+  xlab("Years") +
+  ylab("Count") + 
+  ggtitle("Counts of New Languages (line) and Number of Papers (bars)") 
+
+
+stacked =  pp.2 / pp.1
+stacked
+ggsave(plot = stacked, filename = "figures/arima_forecasts.png", height = 290 / 1.9, units = "mm")
+
+```
+
+
+## Languages by population
+
+
+```{r}
+
+ggplot(data = languages, aes(y = L1_POP, x = factor(studied), fill = factor(studied))) + 
+  geom_boxplot() +
+  geom_jitter() + 
+  scale_y_log10() + 
+  theme_classic()
+
+```
+
+
+## Additional Statistics
+
+
+```{r}
+library(magrittr)
+library(rvest)
+
+# define the page to load
+tt = 
+  read_html("https://en.wikipedia.org/wiki/List_of_languages_by_total_number_of_speakers") %>% 
+    # list all tables on the page
+    html_nodes(css = "table") 
+
+ethnologue = tt[[1]] %>% 
+    # convert to a table
+    html_table(fill = T)
+
+most_spoken = sapply(strsplit(ethnologue$Language, '\\s*[()]'), `[`, 1)
+
+studied_languages = unique(kiddgarcia$language)
+most_spoken[!most_spoken %in% studied_languages]
+
+```
+
