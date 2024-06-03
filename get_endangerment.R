@@ -34,16 +34,6 @@ df$EGIDS = factor(df$EGIDS, levels = c("1", "2", "3", "4", "5", "6a", "6b", "7",
 # make EGIDS a integer
 df$EGIDS.int = as.numeric(df$EGIDS)
 
-# How many languages are not being taught to children
-# See table of level descriptions here: https://en.wikipedia.org/wiki/Expanded_Graded_Intergenerational_Disruption_Scale
-nochildren_levels = c("6b", "7", "8a", "8b", "9")
-nochildren_levels2 = c("7", "8a", "8b", "9")
-
-## No children learners or not
-df$nochildren = ifelse(df$EGIDS %in% nochildren_levels, 1, 0)
-df$nochildren_strict = ifelse(df$EGIDS %in% nochildren_levels2, 1, 0)
-# df$children_speakers = ifelse(df$EGIDS %in% nochildren_levels, 0, 1)
-
 # Match to Glottolog
 ## Read in Glottolog data
 glottolog = read.csv("https://raw.githubusercontent.com/glottolog/glottolog-cldf/master/cldf/languages.csv")

@@ -9,7 +9,7 @@ This document details the data, code, figures, and decisions used in Passmore & 
 
 Packages necessary for this report:
 
-```{r, message=FALSE}
+```{r, software, message=FALSE}
 library(dplyr)
 library(tidyr)
 library(ggplot2)
@@ -57,7 +57,7 @@ These steps are performed within the system command in the text below. More deta
 
 These steps create a datafile where the rows are languages and the columns are Grambank features, which we will use for the multi-dimensional scaling analysis later.
 
-```{r}
+```{r, grambank_data}
 # Create the file if it doesn't exist (takes a minute or so)
 gb_dir = "submodule/grambank-analysed/R_grambank"
 if(!file.exists(
@@ -89,7 +89,7 @@ PHOIBLE is a repository of cross-linguistic phonological inventory data, which h
 
 The code below shows how we wrangle to Phoible data into the appropriate format for the multidimensional scaling analysis. Some languages have multiple entries, with varying phonological inventories. We reduce the data to one inventory per language, choosing inventories at random.
 
-```{r}
+```{r, phoible_data}
 # phoible data
 p_df = read.csv("submodule/phoible_cldf/cldf/values.csv")
 
@@ -122,37 +122,53 @@ phoible = data.frame(Language_ID = phoible_wide$Language_ID, phoible_df)
 
 EGIDS is a 13-point scale of endangerment for 7,206 languages, ranging from 1 (Internationally used languages) to 10 (Langauge is no longer used, and no one holds a symbolic sense of identity with the language). There are seven categories of 'safe' languages, a vulnerable category, three increasing levels of endangerment, and two categories of languages that are no longer used. Our data collapses the two sleeping categories.
 
-We draw the EGIDS scale from the supplementary data of Bromham et al (2022).
+We draw the EGIDS scale from the supplementary data of Bromham et al (2022). We further amend this dataset to a binary category where languages have children speakers or not. Strictly speaking, this is level 7 and above. However, this is a conservative decision. At level 6b, only some children (i.e. not all) are learning the language.
 
 All levels are detailed in the table below:
 
-|           |                |                                                                                                                              |                       |
-|-----------|----------------|------------------------------------------------------------------------------------------------------------------------------|-----------------------|
-| **LEVEL** | **LABEL**      | **DESCRIPTION**                                                                                                              | UNESCO                |
-| 0         | International  | "The language is used internationally for a broad range of functions."                                                       |                       
-                                                                                                                                                             Safe                   |
-| 1         | National       | "The language is used in education, work, mass media, government at the nationwide level."                                   | Safe                  |
-| 2         | Regional       | "The language is used for local and regional mass media and governmental services."                                          | Safe                  |
-| 3         | Trade          | "The language is used for local and regional work by both insiders and outsiders."                                           | Safe                  |
-| 4         | Educational    | "Literacy in the language is being transmitted through a system of public education."                                        | Safe                  |
-| 5         | Written        | "The language is used orally by all generations and is effectively used in written form in parts of the community."          | Safe                  |
-| 6a        | Vigorous       | "The language is used orally by all generations and is being learned by children as their first language."                   | Safe                  |
-| 6b        | Threatened     | "The language is used orally by all generations but only some of the                                                         
-                              child-bearing generation are transmitting it to their children."                                                              | Vulnerable            |
-| 7         | Shifting       | "The child-bearing generation knows the language well enough to use                                                          
-                              it among themselves but none are transmitting it to their children."                                                          | Definitely Endangered |
-| 8a        | Moribund       | "The only remaining active speakers of the language are members of the grandparent generation."                              | Severely Endangered   |
-| 8b        | Nearly Extinct | "The only remaining speakers of the language are members of the                                                              
-                              grandparent generation or older who have little opportunity to use the                                                        
-                              language."                                                                                                                    | Critically Endangered |
-| 9         | Dormant        | "The language serves as a reminder of heritage identity for an ethnic community. No one has more than symbolic proficiency." | Extinct               |
-| 10        | Extinct        | "No one retains a sense of ethnic identity associated with the language, even for symbolic purposes. "                       | Extinct               |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| **LEVEL** | **LABEL**      | **DESCRIPTION**                                                                                                                                      | UNESCO                |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 0         | International  | "The language is used internationally for a broad range of functions."                                                                               | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 1         | National       | "The language is used in education, work, mass media, government at the nationwide level."                                                           | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 2         | Regional       | "The language is used for local and regional mass media and governmental services."                                                                  | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 3         | Trade          | "The language is used for local and regional work by both insiders and outsiders."                                                                   | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 4         | Educational    | "Literacy in the language is being transmitted through a system of public education."                                                                | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 5         | Written        | "The language is used orally by all generations and is effectively used in written form in parts of the community."                                  | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 6a        | Vigorous       | "The language is used orally by all generations and is being learned by children as their first language."                                           | Safe                  |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 6b        | Threatened     | "The language is used orally by all generations but only some of the child-bearing generation are transmitting it to their children."                | Vulnerable            |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 7         | Shifting       | "The child-bearing generation knows the language well enough to use it among themselves but non are transmitting it to their children."              | Definitely Endangered |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 8a        | Moribund       | "The only remaining active speakers of the language are members of the grandparent generation."                                                      | Severely Endangered   |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 8b        | Nearly Extinct | "The only remaining speakers of the language are members of the grandparent generation or older who have little opportunity to use the language." \| | Critically Endangered |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 9         | Dormant        | "The language serves as a reminder of heritage identity for an ethnic community. No one has more than symbolic proficiency."                         | Sleeping              |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
+| 10        | Sleeping       | "No one retains a sense of ethnic identify associated with the language, even for symbolic purposes."                                                | Sleeping              |
++-----------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------+
 
 : Table of the Expanded Graded Intergenerational Disruption Scale, reproduced from Lewis and Simons (2010).
 
-```{r warning=FALSE}
+```{r, endangerment_scale, warning=FALSE}
 languages = read.csv("processed_data/language_endangerment.csv")
 
+# How many languages are not being taught to children
+# See table of level descriptions here: https://en.wikipedia.org/wiki/Expanded_Graded_Intergenerational_Disruption_Scale
+nochildren_levels = c("6b", "7", "8a", "8b", "9")
+nochildren_levels2 = c("7", "8a", "8b", "9")
+
+## No children learners or not
+languages$nochildren = ifelse(languages$EGIDS %in% nochildren_levels, 1, 0)
+languages$nochildren_strict = ifelse(languages$EGIDS %in% nochildren_levels2, 1, 0)
 ```
 
 ### Glottolog & the Agglomerated Endangerment Scale (AES)
@@ -205,7 +221,7 @@ The levels of endangerment in the AES scale are described in the table below:
 
 We create an additional variable determining whether a language is expected to have children speakers based on their endangerment level. With respect to the AES descriptions, we describe this as 'shifting' or greater. In all scales, 'shifting' is the level where the description requires that no children are learning the language and therefore, are languages inaccessible to child language acquisition.
 
-```{r message=FALSE}
+```{r, glottolog, message=FALSE}
 glottolog =
   cldf("https://github.com/glottolog/glottolog-cldf/archive/refs/tags/v4.8.zip")
 
@@ -225,32 +241,46 @@ kiddgarcia = read.csv('data/journal_archive_data_2021.csv', sep = ";")
 kiddgarcia_matching = read.csv("processed_data/name_matching.csv")
 kiddgarcia = left_join(kiddgarcia, kiddgarcia_matching, by = "language")
 
-languages = left_join(languages, kiddgarcia, 
+# Make sure we count each language once for each paper 
+## The data is in long format so if a paper is about morphosyntax and pragmatics in English, 
+## English will be listed across two rows. 
+kiddgarcia_counts = kiddgarcia %>% 
+  distinct(title, year, volume, issue, journal, egids_matching, .keep_all = TRUE) %>% 
+  group_by(egids_matching) %>% 
+  summarise(count = n()) %>% 
+  na.omit()
+
+languages = left_join(languages, kiddgarcia_counts, 
                       by = c("Name" = "egids_matching"))
 
 # Languages that have been studied have a paper count
 languages$studied = ifelse(is.na(languages$count), 0, 1)
 
 # Languages that have had a phonological or morphosyntax study about them
-kiddgarcia_topics = kiddgarcia %>% 
-  group_by(language) %>% 
-  mutate(phonology_bin = ifelse(topic == "Phonology", 1, 0),
-         morphosyntax_bin = ifelse(topic == "Morphosyntax", 1, 0)) %>% 
-  summarise(phonology_sum = sum(phonology_bin), 
-            phonology_studied = phonology_sum > 0,
-            morphosyntax_sum = sum(morphosyntax_bin),
-            morphosyntax_studied = morphosyntax_sum > 0
-            ) %>% 
-  left_join(kiddgarcia_matching, by = "language")
+kiddgarcia_topics = kiddgarcia %>%
+  group_by(language) %>%
+  mutate(
+    phonology_bin = ifelse(topic == "Phonology", 1, 0),
+    morphosyntax_bin = ifelse(topic == "Morphosyntax", 1, 0)
+  ) %>%
+  summarise(
+    phonology_sum = sum(phonology_bin, na.rm = TRUE),
+    phonology_studied = phonology_sum > 0,
+    morphosyntax_sum = sum(morphosyntax_bin, na.rm = TRUE),
+    morphosyntax_studied = morphosyntax_sum > 0
+  ) %>%
+  na.omit() %>%
+  left_join(kiddgarcia_matching, by = "language") %>%
+  select(
+    egids_matching,
+    phonology_sum,
+    phonology_studied,
+    morphosyntax_sum,
+    morphosyntax_studied
+  )
 
 languages = left_join(languages, kiddgarcia_topics, 
-                      by = c("Name" = "egids_matching", 
-                             "count" = "count",
-                             "language" = "language"))
-
-## Add glottocodes to the languages data
-# languages = left_join(languages, glottolog_languages[,c("ISO639P3code", "Glottocode")],
-#                       by = c("LANG_ISO" = "ISO639P3code"))
+                      by = c("Name" = "egids_matching"))
 
 # Are all languages matched? 
 sum(!is.na(languages$count)) == nrow(kiddgarcia_matching)
@@ -270,14 +300,29 @@ This section contains graphs used in the main text, as well as alternative depic
 This histogram shows the proportion of languages studied by endangerment category, split by whether the languages have been studied or not, according to Kidd & Garcia (2022).
 
 ```{r}
-plot_prop = languages %>% 
+
+global_prop = languages %>% 
+  group_by(EGIDS.int) %>% 
+  summarise(n = n(), .groups = 'keep') %>% 
+  ungroup() %>% 
+  mutate(freq = n / sum(n)) %>%
+  na.omit()
+
+global_prop$studied = 0
+
+studied_prop = languages %>% 
   group_by(studied, EGIDS.int) %>% 
   summarise(n = n(), .groups = 'keep') %>% 
   group_by(studied) %>% 
   mutate(freq = n / sum(n)) %>%
   na.omit()
 
-plot_prop$studied = ifelse(plot_prop$studied == 1, "Studied", "Not Studied")
+plot_prop = bind_rows(global_prop, studied_prop[studied_prop$studied == 1,])
+
+plot_prop$studied =
+  ifelse(plot_prop$studied == 1,
+         "Studied Distribution",
+         "Global Distribution")
 plot_prop$EGIDS.char = recode(plot_prop$EGIDS.int,
                        `0` = "International", 
                        `1` = "National",
@@ -326,12 +371,13 @@ p_base = ggplot(plot_prop,
 pp = p_base + geom_bracket(
   xmin = "Moribund",
   xmax = "Sleeping",
-  y.position = 0.2,
+  y.position = 0.1,
   tip.length = 0.05,
   vjust = -0.5,
   label = "No children speakers",
   data = data.frame(studied = factor(
-    "Not Studied", levels = c("Studied", "Not Studied")
+    "Global Distribution", levels = c("Studied Distribution",
+         "Global Distribution")
   ),
   EGIDS.char = "Sleeping")
 )  +
@@ -340,7 +386,15 @@ pp = p_base + geom_bracket(
 ggsave(plot = pp, filename = "figures/histogram.png", height = 5)
 
 pp
+
+# Proportion of unstudied langauges that are written, vigorous, or threatened
+unstud_prop = studied_prop %>% 
+  filter(studied == 0 & EGIDS.int >= 5) %>% 
+  summarise(sum(freq))
+
 ```
+
+The majority of unstudied languages in the Kidd & Garcia (2022) data set are categorised as written, vigorous, or threatened (`r round(unstud_prop, 2) * 100`%).
 
 ## Hexbin graphs
 
@@ -417,27 +471,25 @@ hextri_datacleaning = function(df, languages = languages){
   plot_df
 }
 
+set.seed(1234)
 # Run pipeline for each dataset
 plot_phoible = hextri_datacleaning(phoible, languages = languages)
 plot_grambank = hextri_datacleaning(grambank, languages = languages)
+
+# remove outlier 
+plot_phoible = plot_phoible[plot_phoible$MDS.X > -0.04,]
 
 # unmatched data 
 phoible$Language_ID[!phoible$Language_ID %in% plot_phoible$Glottocode]
 grambank$Language_ID[!grambank$Language_ID %in% plot_grambank$Glottocode]
 ```
 
-The dialect names for the language codes above are:
-
-*Phoible*: Norwegian Bokmål; Karo; Kundjeyhmi
-
-*Grambank*: Amam; Balade; Eastern Kikongo; Southern Tangkhul Naga; Situ; Southwestern Dargwa; Zamba; Zaniza Zapotec.
-
 ### No-bin Plots
 
 ```{r}
 p1_phoible = ggplot(plot_phoible, 
                     aes(MDS.X, MDS.Y, col = factor(children))) + 
-  geom_point(aes(shape = factor(studied)), alpha = 0.5) +
+  geom_point(aes(shape = factor(studied), size = phonology_sum + 1), alpha = 0.5) +
   coord_equal() + 
   theme_classic(base_size = font_size) + 
   theme(aspect.ratio = 1, legend.position = "right") + 
@@ -452,7 +504,7 @@ p1_phoible = ggplot(plot_phoible,
 
 p1_grambank = ggplot(plot_grambank, 
                      aes(MDS.X, MDS.Y, col = factor(children))) + 
-  geom_point(aes(shape = factor(studied)), alpha = 0.5) +
+  geom_point(aes(shape = factor(studied), size = morphosyntax_sum + 1), alpha = 0.5) +
   coord_equal() + 
   theme_classic(base_size = font_size) + 
   theme(aspect.ratio = 1, legend.position = "right") + 
@@ -639,6 +691,8 @@ fig1 = p3 / p4 + plot_layout(guides = "collect") &
          alpha = guide_legend(order = 2, title="N Languages"),
          )
 
+fig1
+
 ggsave(plot = fig1, filename = "figures/hexbinplots_stacked.png", 
        height = 297 / 1.95, 
        width = 210, 
@@ -658,6 +712,10 @@ papercount_gb = layer_data(p3_grambank, 3)
 tail(sort(papercount_pb$value), 10)
 tail(sort(papercount_gb$value), 10)
 
+# How many cells are studied vs unstudied
+sum(papercount_pb$value > 0) / length(papercount_pb$value)
+sum(papercount_gb$value > 0) / length(papercount_gb$value)
+
 # how many studied cells have less than 10 papers
 pb.10 = sum(papercount_pb$value <= 10 & papercount_pb$value != 0)
 gb.10 = sum(papercount_gb$value <= 10 & papercount_gb$value != 0)
@@ -669,6 +727,10 @@ cat("There are", pb.10, "cells in Phoible that have less than 10 papers (",
     scales::percent(pb.10p), ").", 
     "and there are", gb.10, 
     "cells in Grambank (", scales::percent(gb.10p), ")")
+
+# Most studied cell as a proportion
+max(papercount_pb$value) / sum(papercount_pb$value)
+max(papercount_gb$value) / sum(papercount_gb$value)
 
 # Proportion per cell
 tail(sort(round(papercount_pb$value / sum(papercount_pb$value), 3)), 10)
@@ -1086,12 +1148,24 @@ pp.2 =
   theme_classic(base_size = font_size) + 
   xlab("Years") +
   ylab("Count") + 
-  ggtitle("Counts of New Languages (line) and Number of papers (bars)") 
+  ggtitle("Counts of New Languages (line) and Number of Papers (bars)") 
 
 
-stacked = pp.1 / pp.2
+stacked =  pp.2 / pp.1
 stacked
-ggsave(plot = stacked, filename = "figures/arima_forecasts.png")
+ggsave(plot = stacked, filename = "figures/arima_forecasts.png", height = 290 / 1.9, units = "mm")
+
+```
+
+## Languages by population
+
+```{r}
+
+ggplot(data = languages, aes(y = L1_POP, x = factor(studied), fill = factor(studied))) + 
+  geom_boxplot() +
+  geom_jitter() + 
+  scale_y_log10() + 
+  theme_classic()
 
 ```
 
