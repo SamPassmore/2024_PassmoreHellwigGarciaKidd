@@ -1,4 +1,6 @@
+# ignore folders
 glottolog/
+figures/
 
 # History files
 .Rhistory
