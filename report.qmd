@@ -1,10 +1,10 @@
 ---
 title: "Child Language Acquisition Diversity & Language Endangerment"
 author: "Sam Passmore, Birgit Hellwig, Rowena Garcia, and Evan Kidd"
-format: pdf
-pdf:
-  fig-width: 8.3
-  fig-height: 5.85
+format: 
+  pdf:
+    fig-width: 7
+    fig-height: 5
 editor: visual
 bibliography: references.bib
 ---
@@ -481,7 +481,7 @@ p2_phoible = ggplot(plot_phoible,
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="Log N Papers"),
-         alhe=guide_legend("Count")) + 
+         alpha=guide_legend("Count")) + 
   ggtitle("Phoible") + 
   xlab("") + ylab("")
 
@@ -503,9 +503,6 @@ p2_grambank = ggplot(plot_grambank,
   ggtitle("Grambank") + 
   xlab("") + ylab("")
 
-#(p2_phoible | p2_grambank) + 
-#  plot_layout(guides = 'collect') & 
-#  theme(legend.position = 'bottom', legend.box="vertical")
 p2_phoible
 
 p2_grambank
@@ -517,6 +514,7 @@ p2_grambank
 The next code section shows how we highlight cells that have been studied, and to weight those cells by the number of papers published.
 
 ```{r, hexbin_plot2}
+set.seed(1234)
 p3_phoible = ggplot(plot_phoible, 
                     aes(MDS.X, MDS.Y, fill = factor(children), 
                         col = factor(children))) + 
@@ -533,6 +531,9 @@ p3_phoible = ggplot(plot_phoible,
   scale_alpha(range = c(0.2, 2)) +
   scale_fill_manual(values = c("#ea324c", "#00b38a"), 
                     labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="N Papers"),
+         alpha=guide_legend(title="N Languages")) +
   ggtitle("Phoible") + 
   xlab("") + ylab("")
 
@@ -572,6 +573,7 @@ p3_grambank
 The next set of code shows how we re-scale the weightings of papers published onto the log-scale.
 
 ```{r, hexbin_plot3}
+set.seed(1234)
 p4_phoible = ggplot(plot_phoible, 
                     aes(MDS.X, MDS.Y, fill = factor(children), 
                         col = factor(children))) + 
@@ -589,6 +591,9 @@ p4_phoible = ggplot(plot_phoible,
   scale_alpha(range = c(0.2, 2)) +
   scale_fill_manual(values = c("#ea324c", "#00b38a"), 
                     labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) +
   ggtitle("Phoible") + 
   xlab("") + ylab("")
 
@@ -610,7 +615,9 @@ p4_grambank = ggplot(plot_grambank,
   scale_alpha(range = c(0.2, 2)) +
   scale_fill_manual(values = c("#ea324c", "#00b38a"), 
                     labels = c("No", "Yes")) + 
-  guides(linewidth=guide_legend(title="Log N Papers")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="Log N Papers"),
+         alpha=guide_legend(title="N Languages")) +
   ggtitle("Grambank") + 
   xlab("") + ylab("")
 
@@ -619,7 +626,7 @@ p4_phoible
 p4_grambank
 ```
 
-```{r, eval=FALSE, echo=FALSE}
+```{r, eval=TRUE, echo=FALSE}
 
 fig1 = p3 / p4 + plot_layout(guides = "collect") &
   theme(legend.position = 'bottom', legend.box="vertical") &
