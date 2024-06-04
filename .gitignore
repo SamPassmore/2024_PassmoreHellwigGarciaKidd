@@ -1,6 +1,7 @@
 # ignore folders
 /glottolog/
 /figures/
+/submodule/
 
 # History files
 .Rhistory
