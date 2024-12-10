@@ -26,6 +26,10 @@ library(assertthat)
 # devtools::install_github("SimonGreenhill/rcldf", dependencies = TRUE)
 library(rcldf)
 
+# To Install ggpubfigs
+# devtools::install_github("JLSteenwyk/ggpubfigs")
+library(ggpubfigs)
+
 ## Parameters
 font_size = 12
 ```
@@ -129,22 +133,22 @@ EGIDS is a 13-point scale of endangerment for 7,206 languages, ranging from 1 (I
 
 We draw the EGIDS scale from the supplementary data of Bromham et al (2022). We further amend this dataset to a binary category where languages have children speakers or not. Strictly speaking, this is level 7 and above. However, this is a conservative decision. At level 6b, only some children (i.e. not all) are learning the language.
 
-|         |                |                                                                                                                                                      |                       |
-|--------------|--------------|-----------------------------|--------------|
-| **LVL** | **LABEL**      | **DESCRIPTION**                                                                                                                                      | **UNESCO**            |
-| 0       | International  | "The language is used internationally for a broad range of functions."                                                                               | Safe                  |
-| 1       | National       | "The language is used in education, work, mass media, government at the nationwide level."                                                           | Safe                  |
-| 2       | Regional       | "The language is used for local and regional mass media and governmental services."                                                                  | Safe                  |
-| 3       | Trade          | "The language is used for local and regional work by both insiders and outsiders."                                                                   | Safe                  |
-| 4       | Educational    | "Literacy in the language is being transmitted through a system of public education."                                                                | Safe                  |
-| 5       | Written        | "The language is used orally by all generations and is effectively used in written form in parts of the community."                                  | Safe                  |
-| 6a      | Vigorous       | "The language is used orally by all generations and is being learned by children as their first language."                                           | Safe                  |
-| 6b      | Threatened     | "The language is used orally by all generations but only some of the child-bearing generation are transmitting it to their children."                | Vulnerable            |
-| 7       | Shifting       | "The child-bearing generation knows the language well enough to use it among themselves but non are transmitting it to their children."              | Definitely Endangered |
-| 8a      | Moribund       | "The only remaining active speakers of the language are members of the grandparent generation."                                                      | Severely Endangered   |
-| 8b      | Nearly Extinct | "The only remaining speakers of the language are members of the grandparent generation or older who have little opportunity to use the language." \| | Critically Endangered |
-| 9       | Dormant        | "The language serves as a reminder of heritage identity for an ethnic community. No one has more than symbolic proficiency."                         | Sleeping              |
-| 10      | Sleeping       | "No one retains a sense of ethnic identify associated with the language, even for symbolic purposes."                                                | Sleeping              |
+|  |  |  |  |
+|----|----|----|----|
+| **LVL** | **LABEL** | **DESCRIPTION** | **UNESCO** |
+| 0 | International | "The language is used internationally for a broad range of functions." | Safe |
+| 1 | National | "The language is used in education, work, mass media, government at the nationwide level." | Safe |
+| 2 | Regional | "The language is used for local and regional mass media and governmental services." | Safe |
+| 3 | Trade | "The language is used for local and regional work by both insiders and outsiders." | Safe |
+| 4 | Educational | "Literacy in the language is being transmitted through a system of public education." | Safe |
+| 5 | Written | "The language is used orally by all generations and is effectively used in written form in parts of the community." | Safe |
+| 6a | Vigorous | "The language is used orally by all generations and is being learned by children as their first language." | Safe |
+| 6b | Threatened | "The language is used orally by all generations but only some of the child-bearing generation are transmitting it to their children." | Vulnerable |
+| 7 | Shifting | "The child-bearing generation knows the language well enough to use it among themselves but non are transmitting it to their children." | Definitely Endangered |
+| 8a | Moribund | "The only remaining active speakers of the language are members of the grandparent generation." | Severely Endangered |
+| 8b | Nearly Extinct | "The only remaining speakers of the language are members of the grandparent generation or older who have little opportunity to use the language." \| | Critically Endangered |
+| 9 | Dormant | "The language serves as a reminder of heritage identity for an ethnic community. No one has more than symbolic proficiency." | Sleeping |
+| 10 | Sleeping | "No one retains a sense of ethnic identify associated with the language, even for symbolic purposes." | Sleeping |
 
 : Table of the Expanded Graded Intergenerational Disruption Scale, reproduced from Lewis and Simons (2010).
 
@@ -297,8 +301,8 @@ p_base = ggplot(plot_prop,
   facet_wrap( ~ studied, nrow = 3) +
   ylab("Proportion of languages") +
   xlab("EGIDS") +
-  scale_fill_manual(values = c(rep("#00b38a", 7), 
-                               "#f2ac42", rep("#ea324c", 4))) +
+  scale_fill_manual(values = c(rep("#009E73", 7), 
+                               "#E69F00", rep("#D55E00", 4))) +
   theme_classic(base_size = font_size) +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
@@ -317,6 +321,8 @@ pp = p_base + geom_bracket(
   EGIDS.char = "Sleeping")
 )  +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(plot = pp, filename = "figures/figure1.png")
 
 pp
 ```
@@ -347,6 +353,9 @@ source("hextri_grobs.R")
 
 ## Build the pipeline as a function
 hextri_datacleaning = function(df, languages = languages){
+  # ensure the same result everytime
+  set.seed(1234)
+  
   # Give data rownames to carry through the analysis
   rownames(df) = df$Language_ID
   
@@ -398,7 +407,6 @@ hextri_datacleaning = function(df, languages = languages){
   plot_df
 }
 
-set.seed(1234)
 # Run pipeline for each dataset
 plot_phoible = hextri_datacleaning(phoible, languages = languages)
 plot_grambank = hextri_datacleaning(grambank, languages = languages)
@@ -408,10 +416,10 @@ plot_phoible = plot_phoible[plot_phoible$MDS.X > -0.04,]
 
 # Unmatched data 
 ## Phoible
-phoible$Language_ID[!phoible$Language_ID %in% plot_phoible$Glottocode]
-
-## Grambank
-grambank$Language_ID[!grambank$Language_ID %in% plot_grambank$Glottocode]
+# phoible$Language_ID[!phoible$Language_ID %in% plot_phoible$Glottocode]
+# 
+# ## Grambank
+# grambank$Language_ID[!grambank$Language_ID %in% plot_grambank$Glottocode]
 ```
 
 ### No-bin Plots
@@ -419,6 +427,7 @@ grambank$Language_ID[!grambank$Language_ID %in% plot_grambank$Glottocode]
 The below plots show the output of the multidimensional scaling analysis, without binning.
 
 ```{r, hexbin_scatter}
+set.seed(1234)
 p1_phoible = ggplot(plot_phoible, 
                     aes(MDS.X, MDS.Y, col = factor(children))) + 
   geom_point(aes(shape = factor(studied), size = phonology_sum + 1), 
@@ -428,7 +437,7 @@ p1_phoible = ggplot(plot_phoible,
   theme(aspect.ratio = 1, legend.position = "right") + 
   scale_linewidth(range = c(0, 3)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73" ), 
                     labels = c("No", "Yes")) + 
   guides(col=guide_legend(title="Children Speakers"),
          shape=guide_legend(title="Studied")) + 
@@ -445,7 +454,7 @@ p1_grambank = ggplot(plot_grambank,
   theme(aspect.ratio = 1, legend.position = "right") + 
   scale_linewidth(range = c(0, 3)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(col=guide_legend(title="Children Speakers"),
          shape=guide_legend(title="Studied")) + 
@@ -465,7 +474,7 @@ The next section of code shows how we add the hexagonal bins to the plots.
 
 ```{r, hexbin_plot1}
 n_bins = 14
-
+set.seed(1234)
 p2_phoible = ggplot(plot_phoible, 
                     aes(MDS.X, MDS.Y, fill = factor(children), 
                         col = factor(children))) + 
@@ -477,7 +486,7 @@ p2_phoible = ggplot(plot_phoible,
         legend.box = "vertical") + 
   scale_linewidth(range = c(0, 3)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="Log N Papers"),
@@ -495,7 +504,7 @@ p2_grambank = ggplot(plot_grambank,
   theme(aspect.ratio = 1, legend.position = "bottom", legend.box="vertical") + 
   scale_linewidth(range = c(0, 3)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="Log N Papers"),
@@ -529,7 +538,7 @@ p3_phoible = ggplot(plot_phoible,
   theme(aspect.ratio = 1, legend.position = "right") + 
   scale_linewidth(range = c(0, 3)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="N Papers"),
@@ -552,16 +561,13 @@ p3_grambank = ggplot(plot_grambank,
   scale_linewidth(range = c(0, 3), 
                   breaks = c(0, 250, 500, 1000)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="N Papers"),
          alpha=guide_legend(title="N Languages")) +
   ggtitle("Grambank") + 
   xlab("") + ylab("")
-
-# p3 = (p3_phoible | p3_grambank) & 
-#   theme(legend.position = 'bottom', legend.box="vertical")
 
 p3_phoible
 
@@ -589,7 +595,7 @@ p4_phoible = ggplot(plot_phoible,
   scale_linewidth(range = c(0, 3), 
                   trans = scales::pseudo_log_trans(base = 10)) +
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="Log N Papers"),
@@ -613,7 +619,7 @@ p4_grambank = ggplot(plot_grambank,
                   trans = scales::pseudo_log_trans(base = 10), 
                   breaks = c(0, 10, 100, 1000)) + 
   scale_alpha(range = c(0.2, 2)) +
-  scale_fill_manual(values = c("#ea324c", "#00b38a"), 
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
                     labels = c("No", "Yes")) + 
   guides(fill=guide_legend(title="Children Speakers"),
          linewidth=guide_legend(title="Log N Papers"),
@@ -627,12 +633,21 @@ p4_grambank
 ```
 
 ```{r, eval=TRUE, echo=FALSE}
+p3 = (p3_phoible | p3_grambank)
 
+p4 = (p4_phoible + p4_grambank)
+
+set.seed(1234)
 fig1 = p3 / p4 + plot_layout(guides = "collect") &
   theme(legend.position = 'bottom', legend.box="vertical") &
   guides(fill = guide_legend(order = 1, title="Children Speakers"), 
          alpha = guide_legend(order = 2, title="N Languages"),
          ) 
+
+ggsave(plot = p3, filename = "figures/hexbinplots_count.png", 
+       height = 297 / 1.95, 
+       width = 210, 
+       units = "mm")
 
 ggsave(plot = p4, filename = "figures/hexbinplots_logscale.png", 
        height = 297 / 1.95, 
@@ -645,7 +660,7 @@ ggsave(plot = fig1, filename = "figures/hexbinplots_stacked.png",
        units = "mm")
 ```
 
-## Summary Statistics
+### Summary Statistics
 
 The next chunk of code will extract the summary information from the plots, for discussion in the text.
 
@@ -653,6 +668,29 @@ The next chunk of code will extract the summary information from the plots, for 
 ### Count data ### 
 papercount_pb = layer_data(p3_phoible, 3)
 papercount_gb = layer_data(p3_grambank, 3)
+
+# how many cells are there
+pb.s = length(papercount_pb$value)
+gb.s = length(papercount_gb$value)
+
+cat("In Phoible plots there are", pb.s, "cells.\n")
+cat("In Grambank plots there are", gb.s, "cells.\n")
+
+# how many cells have been studied
+pb.cs = sum(papercount_pb$value != 0)
+gb.cs = sum(papercount_gb$value != 0)
+
+cat("In Phoible plots,", pb.cs / pb.s, "cells have been studied")
+cat("In Phoible plots,", gb.cs / gb.s, "cells have been studied")
+
+# n papers in one cell
+cat("In the Phoible plot", 
+    round(max(papercount_pb$value) / sum(papercount_pb$value), 2), 
+    "of papers are in the most populated cell.\n")
+
+cat("In the Grambank plot,",
+    round(max(papercount_gb$value) / sum(papercount_gb$value), 2),
+    "of papers are in the most populated cell.\n")
 
 # how many studied cells have less than 10 papers
 pb.10 = sum(papercount_pb$value <= 10 & papercount_pb$value != 0)
@@ -662,9 +700,9 @@ pb.10p = pb.10 / sum(papercount_pb$value != 0)
 gb.10p = gb.10 / sum(papercount_gb$value != 0)
 
 cat("There are", pb.10, "cells in Phoible that have less than 10 papers (",  
-    scales::percent(pb.10p), ").\n", 
+    scales::percent(pb.10 / pb.cs), "). From a total of ,", pb.cs, " studied cells\n", 
     "and there are", gb.10, 
-    "cells in Grambank (", scales::percent(gb.10p), ")")
+    "cells in Grambank (", scales::percent(gb.10 / gb.cs), "). Froma total of", gb.cs, "studied cells.\n")
 
 # extract data from ggplot
 pb_pdata.1 = layer_data(p3_phoible, 1)
@@ -711,6 +749,96 @@ max(papercount_gb$value) / sum(papercount_gb$value)
 # Proportion per cell
 tail(sort(round(papercount_pb$value / sum(papercount_pb$value), 3)), 10)
 tail(sort(round(papercount_gb$value / sum(papercount_gb$value), 3)), 10)
+
+```
+
+### Hexbin Variation tests
+
+Our Hexbin statistics are based on the number of languages within each hexbin in the graph. Size of hexbins are a parameter chosen by us, however. Here, we show that increasing the size of hexbins only affects the counts but not proportion of cells that are studied or unstudied, with these variables showing a strong positive correlation.
+
+```{r}
+n_bins.pb = c()
+n_bins.gb = c()
+s_bins.pb = c()
+s_bins.gb = c()
+
+bin_size = seq(from = 5, to = 40, by = 5)
+
+for(i in seq_along(bin_size)){
+  plot_phoible = hextri_datacleaning(phoible, languages = languages)
+  plot_grambank = hextri_datacleaning(grambank, languages = languages)
+  
+  p3_phoible = ggplot(plot_phoible, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = bin_size[i]) + 
+  geom_hex(fill = NA, color = "white", bins = bin_size[i], lwd = 0.05) +
+  stat_summary_hex(aes(
+    z = phonology_sum,
+    linewidth = after_stat(value),
+  ), fun = ~ sum((.x[.x > 0])), col = "black", fill = NA, bins = bin_size[i]) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
+                    labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="N Papers"),
+         alpha=guide_legend(title="N Languages")) +
+  ggtitle("Phoible") + 
+  xlab("") + ylab("")
+
+  p3_grambank = ggplot(plot_grambank, 
+                    aes(MDS.X, MDS.Y, fill = factor(children), 
+                        col = factor(children))) + 
+  geom_hextri(color = "white", linewidth = 0.0, bins = bin_size[i]) + 
+  geom_hex(fill = NA, color = "white", bins = bin_size[i], lwd = 0.05) +
+  stat_summary_hex(aes(
+    z = morphosyntax_sum,
+    linewidth = after_stat(value),
+  ), fun = ~ sum((.x[.x > 0])), col = "black", fill = NA, bins = bin_size[i]) +
+  coord_equal() + 
+  theme_classic(base_size = font_size) + 
+  theme(aspect.ratio = 1, legend.position = "right") + 
+  scale_linewidth(range = c(0, 3), 
+                  breaks = c(0, 250, 500, 1000)) + 
+  scale_alpha(range = c(0.2, 2)) +
+  scale_fill_manual(values = c("#D55E00", "#009E73"), 
+                    labels = c("No", "Yes")) + 
+  guides(fill=guide_legend(title="Children Speakers"),
+         linewidth=guide_legend(title="N Papers"),
+         alpha=guide_legend(title="N Languages")) +
+  ggtitle("Grambank") + 
+  xlab("") + ylab("")
+  
+  pb_pdata.2 = layer_data(p3_phoible, 2)
+  gb_pdata.2 = layer_data(p3_grambank, 2)
+  
+  pb_pdata.3 = layer_data(p3_phoible, 3)
+  gb_pdata.3 = layer_data(p3_grambank, 3)
+  
+  # Hexbins counts
+  # number of bins
+  n_bins.pb[i] = nrow(pb_pdata.2)
+  n_bins.gb[i] = nrow(gb_pdata.2)
+  
+  # number of studied bins
+  s_bins.pb[i] = sum(pb_pdata.3$value > 0)
+  s_bins.gb[i] = sum(gb_pdata.3$value > 0)
+}
+
+var_pb = data.frame(n_bins = n_bins.pb, studied_bins = s_bins.pb, 
+                    dataset = "Phoible", label = bin_size)
+var_gb = data.frame(n_bins = n_bins.gb, studied_bins = s_bins.gb, 
+                    dataset = "Grambank", label = bin_size)
+var_df = rbind(var_pb, var_gb)
+
+ggplot(var_df, aes(x = n_bins, y = studied_bins, col = dataset, label = label)) + 
+  geom_text() + 
+  ylab("Number of studied bins") + 
+  xlab("Total number of bins")
 
 ```
 
@@ -939,12 +1067,12 @@ pp.1 =
   # Children spoken languages losees
   geom_line(data = plot_arima_pred,
             aes(x = year, y = cumsum_languages_nochildren), 
-            col = "#ea324c", lty = "dashed") +
+            col = "#D55E00", lty = "dashed") +
   geom_smooth(data = plot_arima_pred,
               aes(x = year, y = cumsum_languages_nochildren, 
                   ymin = cumsum_languages_nochildrenL, 
                   ymax = cumsum_languages_nochildrenU),
-              fill = "#ea324c", stat = "identity", linetype=0) +
+              fill = "#D55E00", stat = "identity", linetype=0) +
   # Spoken Language plot_arima_pred
   geom_line(data = plot_arima_pred, 
             aes(x = year, y = cumsum_languages_endangered),
